@@ -1,0 +1,82 @@
+version: "2"
+run:
+  build-tags:
+    - generate_monad
+linters:
+  default: all
+  disable:
+    - depguard
+    - gosec
+    - nonamedreturns
+    - tagliatelle
+  settings:
+    exhaustive:
+      default-signifies-exhaustive: true
+    funlen:
+      # Checks the number of lines in a function.
+      # If lower than 0, disable the check.
+      # Default: 60
+      lines: 100
+      # Ignore comments when counting lines.
+      # Default false
+      ignore-comments: true
+    gocritic:
+      disabled-checks:
+        - newDeref # *new(T) is not a mistake
+    ireturn:
+      allow:
+        - empty
+        - error
+        - stdlib
+        - anon
+        - generic
+    nlreturn:
+      block-size: 2
+    varnamelen:
+      max-distance: 6
+      ignore-names:
+        - tt # tt is shortname for testCase in table driven tests
+        - wg # wg is shortname for WaitGroup
+        - mu # mu is shortname for Mutex
+        - xs # xs is shortname for []X
+        - ys # ys is shortname for []Y
+        - zs # zs is shortname for []Z
+        - ch # ch is shortname for channel
+        - i # i is shortname for index
+        - j # j is shortname for index
+        - k # k is shortname for index
+        - it # it is shortname for item or iterator
+  exclusions:
+    # Which dirs to exclude: issues from them won't be reported.
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - vendor
+      - third_party
+      - testdata
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - goimports
+  settings:
+    gci:
+      sections:
+        - blank # Blank section: contains all blank imports. This section is not present unless explicitly enabled.
+        - dot # Dot section: contains all dot imports. This section is not present unless explicitly enabled.
+        - standard # Standard section: captures all standard packages.
+        - default # Default section: contains all imports that could not be matched to another section type.
+        - alias # Alias section: contains all alias imports. This section is not present unless explicitly enabled.
+        - localmodule # Local module section: contains all local packages. This section is not present unless explicitly enabled.
+      custom-order: true
+  exclusions:
+    # Which dirs to exclude: style from them won't be formatted.
+    generated: lax
+    paths:
+      - vendor
+      - third_party
+      - testdata

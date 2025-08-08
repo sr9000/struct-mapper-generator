@@ -1,11 +1,13 @@
 package primitive_test
 
 import (
+	"caster-generator/options"
 	"caster-generator/primitive"
-	"github.com/davecgh/go-spew/spew"
-	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
+
+	"github.com/davecgh/go-spew/spew"
+	"github.com/stretchr/testify/assert"
 )
 
 type FooStringEnum string
@@ -23,7 +25,7 @@ func TestGenerateEnums(t *testing.T) {
 		t.Parallel()
 
 		res := primitive.Generate(reflect.TypeFor[FooStringEnum](), reflect.TypeFor[BarStringEnum](),
-			"foo", "bar", "barStem", "ConvertFooToBar", primitive.CategoryAll)
+			"foo", "bar", "barStem", "ConvertFooToBar", options.CategoryAll)
 		assert.NotEmpty(t, res)
 
 		spew.Dump(res)

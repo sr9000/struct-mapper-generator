@@ -1,37 +1,20 @@
 package primitive
 
-type CategoryEnum int
+import "caster-generator/options"
 
 type ConversionPair struct {
 	From, To KindEnum
 }
 
-const (
-	CategorySafeNumber   CategoryEnum = 1 << iota // int, uint, float without precision loss
-	CategoryUnsafeNumber                          // int, uint, float with precision loss
-	CategoryTextNumber                            // int, uint, float <-> string: textual number representation
-	CategoryNumericBool                           // int <-> bool: 0, 1 representation of boolean values
-	CategoryTextualBool                           // string <-> bool: yes, no, on, off, true, false representation of boolean values
-	CategoryDatetime                              // string(RFC3339Nano) <-> time.Time: textual date and time representation
-	CategoryTimestamp                             // int(Unix seconds) <-> time.Time: Unix timestamp representation
-	CategoryDuration                              // string(2h45m) <-> time.Duration: textual duration representation
-	CategoryNanoseconds                           // int(nanoseconds) <-> time.Duration: numerical (integer) duration representation
-	CategorySeconds                               // float(seconds) <-> time.Duration: numerical (floating-point) duration representation
-	CategoryEnumString                            // string <-> enum: textual representation of an enum type (uses parse/isValid/string methods)
-
-	CategoryAll  = (1 << iota) - 1 //all categories combined
-	CategoryNone = 0               // no categories selected
-)
-
-var conversionPairs map[CategoryEnum]map[ConversionPair]struct{}
+var conversionPairs map[options.CategoryEnum]map[ConversionPair]struct{}
 
 func init() {
-	conversionPairs = make(map[CategoryEnum]map[ConversionPair]struct{})
+	conversionPairs = make(map[options.CategoryEnum]map[ConversionPair]struct{})
 
-	conversionPairs[CategorySafeNumber] = safeNumberConversionPairs()
+	conversionPairs[options.CategorySafeNumber] = safeNumberConversionPairs()
 
 	// CategoryUnsafeNumber: unsafe number conversions
-	conversionPairs[CategoryUnsafeNumber] = map[ConversionPair]struct{}{}
+	conversionPairs[options.CategoryUnsafeNumber] = map[ConversionPair]struct{}{}
 	for fromKind := KindEnum(0); int(fromKind) < KindTotal; fromKind++ {
 		if !fromKind.IsNumber() {
 			continue
@@ -43,78 +26,78 @@ func init() {
 			}
 
 			pair := ConversionPair{fromKind, toKind}
-			if _, ok := conversionPairs[CategorySafeNumber][pair]; ok {
+			if _, ok := conversionPairs[options.CategorySafeNumber][pair]; ok {
 				continue
 			}
 
-			conversionPairs[CategoryUnsafeNumber][pair] = struct{}{}
+			conversionPairs[options.CategoryUnsafeNumber][pair] = struct{}{}
 		}
 	}
 
 	// CategoryTextNumber: text <-> number conversions
-	conversionPairs[CategoryTextNumber] = map[ConversionPair]struct{}{}
+	conversionPairs[options.CategoryTextNumber] = map[ConversionPair]struct{}{}
 	for numberKind := KindEnum(0); int(numberKind) < KindTotal; numberKind++ {
 		if !numberKind.IsNumber() {
 			continue
 		}
 
-		conversionPairs[CategoryTextNumber][ConversionPair{numberKind, KindString}] = struct{}{}
-		conversionPairs[CategoryTextNumber][ConversionPair{KindString, numberKind}] = struct{}{}
+		conversionPairs[options.CategoryTextNumber][ConversionPair{numberKind, KindString}] = struct{}{}
+		conversionPairs[options.CategoryTextNumber][ConversionPair{KindString, numberKind}] = struct{}{}
 	}
 
 	// CategoryNumericBool: int <-> bool conversions
-	conversionPairs[CategoryNumericBool] = map[ConversionPair]struct{}{}
+	conversionPairs[options.CategoryNumericBool] = map[ConversionPair]struct{}{}
 	for fromKind := KindEnum(0); int(fromKind) < KindTotal; fromKind++ {
 		if !fromKind.IsInteger() {
 			continue
 		}
 
-		conversionPairs[CategoryNumericBool][ConversionPair{fromKind, KindBool}] = struct{}{}
-		conversionPairs[CategoryNumericBool][ConversionPair{KindBool, fromKind}] = struct{}{}
+		conversionPairs[options.CategoryNumericBool][ConversionPair{fromKind, KindBool}] = struct{}{}
+		conversionPairs[options.CategoryNumericBool][ConversionPair{KindBool, fromKind}] = struct{}{}
 	}
 
 	// string <-> bool: yes, no, on, off, true, false
-	conversionPairs[CategoryTextualBool] = map[ConversionPair]struct{}{
+	conversionPairs[options.CategoryTextualBool] = map[ConversionPair]struct{}{
 		{KindString, KindBool}: {},
 		{KindBool, KindString}: {},
 	}
 
 	// CategoryDatetime: string(RFC3339Nano) <-> time.Time conversions
-	conversionPairs[CategoryDatetime] = map[ConversionPair]struct{}{
+	conversionPairs[options.CategoryDatetime] = map[ConversionPair]struct{}{
 		{KindString, KindTime}: {},
 		{KindTime, KindString}: {},
 	}
 
 	// CategoryTimestamp: int(Unix seconds) <-> time.Time conversions
-	conversionPairs[CategoryTimestamp] = map[ConversionPair]struct{}{}
+	conversionPairs[options.CategoryTimestamp] = map[ConversionPair]struct{}{}
 	for numberKind := KindEnum(0); int(numberKind) < KindTotal; numberKind++ {
 		if !numberKind.IsInteger() {
 			continue
 		}
 
-		conversionPairs[CategoryTimestamp][ConversionPair{numberKind, KindTime}] = struct{}{}
-		conversionPairs[CategoryTimestamp][ConversionPair{KindTime, numberKind}] = struct{}{}
+		conversionPairs[options.CategoryTimestamp][ConversionPair{numberKind, KindTime}] = struct{}{}
+		conversionPairs[options.CategoryTimestamp][ConversionPair{KindTime, numberKind}] = struct{}{}
 	}
 
 	// CategoryDuration: string(2h45m) <-> time.Duration conversions
-	conversionPairs[CategoryDuration] = map[ConversionPair]struct{}{
+	conversionPairs[options.CategoryDuration] = map[ConversionPair]struct{}{
 		{KindString, KindDuration}: {},
 		{KindDuration, KindString}: {},
 	}
 
 	// CategoryNanoseconds: int(nanoseconds) <-> time.Duration conversions
-	conversionPairs[CategoryNanoseconds] = map[ConversionPair]struct{}{}
+	conversionPairs[options.CategoryNanoseconds] = map[ConversionPair]struct{}{}
 	for numberKind := KindEnum(0); int(numberKind) < KindTotal; numberKind++ {
 		if !numberKind.IsInteger() || numberKind == KindUint64 {
 			continue
 		}
 
-		conversionPairs[CategoryNanoseconds][ConversionPair{numberKind, KindDuration}] = struct{}{}
-		conversionPairs[CategoryNanoseconds][ConversionPair{KindDuration, numberKind}] = struct{}{}
+		conversionPairs[options.CategoryNanoseconds][ConversionPair{numberKind, KindDuration}] = struct{}{}
+		conversionPairs[options.CategoryNanoseconds][ConversionPair{KindDuration, numberKind}] = struct{}{}
 	}
 
 	// CategorySeconds: float(seconds) <-> time.Duration conversions
-	conversionPairs[CategorySeconds] = map[ConversionPair]struct{}{
+	conversionPairs[options.CategorySeconds] = map[ConversionPair]struct{}{
 		{KindFloat32, KindDuration}: {},
 		{KindFloat64, KindDuration}: {},
 		{KindDuration, KindFloat32}: {},
@@ -122,7 +105,7 @@ func init() {
 	}
 
 	// CategoryEnumString: string <-> enum conversions
-	conversionPairs[CategoryEnumString] = map[ConversionPair]struct{}{
+	conversionPairs[options.CategoryEnumString] = map[ConversionPair]struct{}{
 		{KindString, KindPrimitiveEnum}:        {},
 		{KindPrimitiveEnum, KindString}:        {},
 		{KindPrimitiveEnum, KindPrimitiveEnum}: {},

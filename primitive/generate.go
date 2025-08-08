@@ -2,13 +2,14 @@ package primitive
 
 import (
 	"bytes"
+	"caster-generator/options"
 	"fmt"
 	"maps"
 	"reflect"
 	"text/template"
 )
 
-func Generate(src, dst reflect.Type, srcName, dstName, dstStem, funcName string, allowed CategoryEnum) []string {
+func Generate(src, dst reflect.Type, srcName, dstName, dstStem, funcName string, allowed options.CategoryEnum) []string {
 	srcKind := FromReflectType(src)
 	dstKind := FromReflectType(dst)
 	pair := ConversionPair{srcKind, dstKind}
@@ -76,10 +77,10 @@ func Generate(src, dst reflect.Type, srcName, dstName, dstStem, funcName string,
 	return res
 }
 
-func allowedSet(allowed CategoryEnum) map[ConversionPair]struct{} {
+func allowedSet(allowed options.CategoryEnum) map[ConversionPair]struct{} {
 	res := map[ConversionPair]struct{}{}
 
-	for category := CategoryEnum(1); category&CategoryAll > 0; category <<= 1 {
+	for category := options.CategoryEnum(1); category&options.CategoryAll > 0; category <<= 1 {
 		if allowed&category == 0 {
 			continue
 		}

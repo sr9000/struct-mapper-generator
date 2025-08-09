@@ -47,3 +47,13 @@ func mergeResult(dst, src *Result) {
 		dst.Imports[k] = struct{}{}
 	}
 }
+
+func isError(t reflect.Type) bool {
+	if t == nil {
+		return false
+	}
+
+	terr := reflect.TypeOf((*error)(nil)).Elem()
+
+	return t.Implements(terr)
+}

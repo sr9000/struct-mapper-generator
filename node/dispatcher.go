@@ -21,6 +21,20 @@ type Result struct {
 	Imports    map[string]struct{} // e.g. "fmt", "time", "strconv", "strings"
 }
 
+func WithCustomName(fn FuncNamer, src, dst reflect.Type, name string) FuncNamer {
+	if fn == nil {
+		panic("customized namer function cannot be nil")
+	}
+
+	return func(srcIn, dstIn reflect.Type) string {
+		if srcIn == src && dstIn == dst {
+			return name
+		}
+
+		return fn(srcIn, dstIn)
+	}
+}
+
 func Dispatch(src, dst reflect.Type) DispatcherEnum {
 	if src.Kind() == reflect.Ptr || dst.Kind() == reflect.Ptr {
 		panic("dispatcher is not allowing pointer reflect types")
@@ -72,24 +86,26 @@ func Dispatch(src, dst reflect.Type) DispatcherEnum {
 // 2) slice/array
 // 3) map
 // It returns statements to compute dstVar from srcExpr, a set of needed nested struct casters, and import hints.
-func Generate(
-	src, dst reflect.Type,
-	srcExpr, dstVar, dstStem, funcName string,
+func (g *Generator) Generate(
+	src, dst reflect.Type, casters ...any,
 ) []string {
-	out := Result{Imports: map[string]struct{}{}}
+	//out := Result{Imports: map[string]struct{}{}}
 
-	//srcDepth, srcBase := ptrDepthAndBase(src)
+	srcDepth, srcBase := ptrDepthAndBase(src)
+	dstDepth, dstBase := ptrDepthAndBase(dst)
 
-	switch base(dst).Kind() {
-	case reflect.Slice, reflect.Array:
-		//out = genSliceOrArray(src, dst, srcExpr, dstVar, dstStem, funcName, nameOf, allowed)
-	case reflect.Map:
-		//out = genMap(src, dst, srcExpr, dstVar, dstStem, funcName, nameOf, allowed)
-	default:
-		//out = genTypeOrPointer(src, dst, srcExpr, dstVar, dstStem, funcName, nameOf, allowed)
+	fmt.Println(srcDepth, dstDepth)
+
+	switch Dispatch(srcBase, dstBase) {
+	case DispatcherInterface:
+	case DispatcherPrimitive:
+	case DispatcherSlice:
+	case DispatcherMap:
+	case DispatcherStruct:
+	case DispatcherUnknown:
+
 	}
 
-	fmt.Println(out)
 	return nil
 }
 
@@ -102,10 +118,11 @@ func base(t reflect.Type) reflect.Type {
 
 // ptrDepthAndBase returns the pointer depth and the final base type.
 func ptrDepthAndBase(t reflect.Type) (depth int, base reflect.Type) {
-	depth = 0
-	for t != nil && t.Kind() == reflect.Ptr {
+	depth, base = 0, t
+	for t != nil && base.Kind() == reflect.Ptr {
 		depth++
-		t = t.Elem()
+		base = base.Elem()
 	}
-	return depth, t
+
+	return
 }

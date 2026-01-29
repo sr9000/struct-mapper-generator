@@ -120,19 +120,25 @@ func validateTypeMapping(
 		path := fmt.Sprintf("%s.121[%s]", basePath, source)
 
 		// Validate source path
-		sourcePath, err := ParsePath(source)
-		if err != nil {
-			result.AddError(path+".source", err.Error())
-		} else if err := validateFieldPath(sourcePath, sourceType, "source"); err != nil {
-			result.AddError(path+".source", err.Error())
+		sourcePath, parseErr := ParsePath(source)
+		if parseErr != nil {
+			result.AddError(path+".source", parseErr.Error())
+		} else {
+			fieldErr := validateFieldPath(sourcePath, sourceType, "source")
+			if fieldErr != nil {
+				result.AddError(path+".source", fieldErr.Error())
+			}
 		}
 
 		// Validate target path
-		targetPath, err := ParsePath(target)
-		if err != nil {
-			result.AddError(path+".target", err.Error())
-		} else if err := validateFieldPath(targetPath, targetType, "target"); err != nil {
-			result.AddError(path+".target", err.Error())
+		targetPath, parseErr := ParsePath(target)
+		if parseErr != nil {
+			result.AddError(path+".target", parseErr.Error())
+		} else {
+			fieldErr := validateFieldPath(targetPath, targetType, "target")
+			if fieldErr != nil {
+				result.AddError(path+".target", fieldErr.Error())
+			}
 		}
 	}
 
@@ -140,14 +146,15 @@ func validateTypeMapping(
 	for j, ignored := range tm.Ignore {
 		path := fmt.Sprintf("%s.ignore[%d]", basePath, j)
 
-		fp, err := ParsePath(ignored)
-		if err != nil {
-			result.AddError(path, err.Error())
+		fp, parseErr := ParsePath(ignored)
+		if parseErr != nil {
+			result.AddError(path, parseErr.Error())
 			continue
 		}
 
-		if err := validateFieldPath(fp, targetType, "target"); err != nil {
-			result.AddError(path, err.Error())
+		fieldErr := validateFieldPath(fp, targetType, "target")
+		if fieldErr != nil {
+			result.AddError(path, fieldErr.Error())
 		}
 	}
 

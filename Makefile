@@ -44,5 +44,5 @@ clean:
 	go clean -testcache
 	rm -f $(BINARY) coverage.out
 
-## all: Run clean, lint, test, bench
-all: clean lint test bench
+## all: Run clean, lint, test, bench, build
+all: clean lint test bench build

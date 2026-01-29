@@ -254,8 +254,12 @@ func GenerateReport(plan *ResolvedMappingPlan) *SuggestionReport {
 func FormatReport(report *SuggestionReport) string {
 	var result string
 
-	var resultSb250 strings.Builder
-	var resultSb258 strings.Builder
+	var (
+		resultSb250 strings.Builder
+		resultSb258 strings.Builder
+		resultSb259 strings.Builder
+	)
+
 	for _, tp := range report.TypePairs {
 		resultSb250.WriteString(fmt.Sprintf("\n=== %s -> %s ===\n", tp.Source, tp.Target))
 		resultSb250.WriteString(fmt.Sprintf("Explicit: %d, Ignored: %d, Auto-matched: %d, Unmapped: %d\n",
@@ -276,8 +280,11 @@ func FormatReport(report *SuggestionReport) string {
 		if len(tp.Unmapped) > 0 {
 			resultSb250.WriteString("\nUnmapped target fields (need review):\n")
 
-			var resultSb265 strings.Builder
-			var resultSb276 strings.Builder
+			var (
+				resultSb265 strings.Builder
+				resultSb276 strings.Builder
+			)
+
 			for _, um := range tp.Unmapped {
 				resultSb265.WriteString(fmt.Sprintf("  ✗ %s: %s\n", um.TargetField, um.Reason))
 
@@ -293,7 +300,8 @@ func FormatReport(report *SuggestionReport) string {
 					resultSb276.WriteString(resultSb269.String())
 				}
 			}
-			result += resultSb276.String()
+
+			resultSb259.WriteString(resultSb276.String())
 
 			resultSb258.WriteString(resultSb265.String())
 		}
@@ -304,6 +312,9 @@ func FormatReport(report *SuggestionReport) string {
 			resultSb250.WriteString("\n✓ All target fields mapped.\n")
 		}
 	}
+
+	result += resultSb259.String()
+
 	result += resultSb258.String()
 
 	result += resultSb250.String()

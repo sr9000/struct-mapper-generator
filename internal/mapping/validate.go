@@ -339,6 +339,11 @@ func resolveTypeID(name string, graph *analyze.TypeGraph) *analyze.TypeInfo {
 				if strings.HasSuffix(id.PkgPath, "/"+pkgShort) || id.PkgPath == pkgShort {
 					return info
 				}
+				// Also check if the package name (not path) matches
+				// This handles cases where package name differs from directory name
+				if pkgInfo := graph.Packages[id.PkgPath]; pkgInfo != nil && pkgInfo.Name == pkgShort {
+					return info
+				}
 			}
 		}
 	}

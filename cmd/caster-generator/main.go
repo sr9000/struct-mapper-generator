@@ -110,7 +110,7 @@ Options:
 
 	var packages StringSliceFlag
 
-	fs.Var(&packages, "pkg", "Package path to analyze (can be specified multiple times)")
+	fs.Var(&packages, "pkg", "Package path to analyze (can be specified multiple times, default: ./...)")
 	verbose := fs.Bool("verbose", false, "Show detailed field information including tags")
 	typeFilter := fs.String("type", "", "Filter to show only a specific type")
 
@@ -118,10 +118,9 @@ Options:
 		os.Exit(1)
 	}
 
+	// Default to current directory if no packages specified
 	if len(packages) == 0 {
-		fmt.Fprintln(os.Stderr, "Error: at least one -pkg flag is required")
-		fs.Usage()
-		os.Exit(1)
+		packages = append(packages, "./...")
 	}
 
 	// Load packages
@@ -188,11 +187,11 @@ Options:
 
 	var packages StringSliceFlag
 
-	fs.Var(&packages, "pkg", "Package path to analyze (can be specified multiple times)")
-	fromType := fs.String("from", "", "Source type (e.g., store.Order)")
-	toType := fs.String("to", "", "Target type (e.g., warehouse.Order)")
-	outFile := fs.String("out", "", "Output YAML file (stdout if not specified)")
-	minConfidence := fs.Float64("min-confidence", 0.7, "Minimum confidence for auto-matching")
+	fs.Var(&packages, "pkg", "Package path to analyze (auto-detected from type names if not specified)")
+	fromType := fs.String("from", "", "Source type (e.g., store.Order) - required")
+	toType := fs.String("to", "", "Target type (e.g., warehouse.Order) - required")
+	outFile := fs.String("out", "", "Output YAML file (default: stdout)")
+	minConfidence := fs.Float64("min-confidence", 0.7, "Minimum confidence for auto-matching (0.0-1.0)")
 
 	if err := fs.Parse(args); err != nil {
 		os.Exit(1)
@@ -219,7 +218,8 @@ Options:
 	}
 
 	if len(packages) == 0 {
-		fmt.Fprintln(os.Stderr, "Error: at least one -pkg flag is required, or use qualified type names (e.g., store.Order)")
+		fmt.Fprintln(os.Stderr, "Error: cannot auto-detect packages. "+
+			"Use qualified type names (e.g., store.Order) or specify -pkg flags")
 		fs.Usage()
 		os.Exit(1)
 	}

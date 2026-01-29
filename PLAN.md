@@ -16,7 +16,7 @@ This tool is intentionally **human-supervised**: it prefers to be helpful and ex
 - [x] Define success criteria (contract)
 - [x] Plan milestones (vertical slices)
 - [x] Design proposed repo layout
-- [ ] Implement static analysis (AST + go/types): build a type graph once
+- [x] Implement static analysis (AST + go/types): build a type graph once
 - [ ] Implement matching & suggestions (best-effort engine)
 - [ ] Define YAML mapping definitions (authoritative, human-reviewed)
 - [ ] Implement resolution pipeline (YAML wins, then suggestions)
@@ -128,13 +128,13 @@ The analyzer should produce a canonical in-memory model, so later phases don’t
 ### Edge-case policy (explicit 80/20)
 Start with:
 - exported struct fields only
-- treat external types (e.g. `time.Time`) as “opaque” values (assign/convert only)
+- treat external types (e.g. `time.Time`) as "opaque" values (assign/convert only)
 - no maps, no interfaces, no generics (reject with clear diagnostics)
 
 Checklist
-- [ ] Package loader + caching
-- [ ] Struct field extraction (include tags)
-- [ ] Type stringer for readable paths (`Order.Items[].ProductID`)
+- [x] Package loader + caching
+- [x] Struct field extraction (include tags)
+- [x] Type stringer for readable paths (`Order.Items[].ProductID`)
 
 ---
 

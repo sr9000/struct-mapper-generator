@@ -10,4 +10,6 @@
 //   - Slice mapping (make, loop, per-element conversion)
 //   - Nested struct calls (composed generated casters)
 //   - Transform function calls
+//
+// See generator.go for the main Generator type and its methods.
 package gen

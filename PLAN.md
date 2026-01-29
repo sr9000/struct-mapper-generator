@@ -20,7 +20,7 @@ This tool is intentionally **human-supervised**: it prefers to be helpful and ex
 - [x] Implement matching & suggestions (best-effort engine)
 - [x] Define YAML mapping definitions (authoritative, human-reviewed)
 - [x] Implement resolution pipeline (YAML wins, then suggestions)
-- [ ] Implement code generation (fast casters)
+- [x] Implement code generation (fast casters)
 - [ ] Design CLI workflows (semi-automated)
 - [ ] Define 80/20 boundaries (explicit non-goals for v1)
 
@@ -303,9 +303,9 @@ Goal: generate readable, allocation-light Go.
 - stable import ordering
 
 Checklist
-- [ ] Implement emitters for assign/convert/pointer/slice/nested
-- [ ] Generate comments/TODOs for unresolved target fields
-- [ ] Run `go/format` and ensure `go test ./...` stays clean
+- [x] Implement emitters for assign/convert/pointer/slice/nested
+- [x] Generate comments/TODOs for unresolved target fields
+- [x] Run `go/format` and ensure `go test ./...` stays clean
 
 ---
 
@@ -347,6 +347,6 @@ Start strict and expand only if required:
 - [x] Implement normalization + Levenshtein + scoring (`internal/match`)
 - [x] Define YAML schema + validation + transform registry (`internal/mapping`)
 - [x] Implement mapping resolution + diagnostics + suggestion export (`internal/plan`)
-- [ ] Implement deterministic caster generator (`internal/gen`)
+- [x] Implement deterministic caster generator (`internal/gen`)
 - [ ] Add CLI commands: analyze/suggest/gen/check (`cmd/caster-generator`)
 - [ ] Document workflow: suggest → review YAML → gen → commit

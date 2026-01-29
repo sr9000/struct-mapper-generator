@@ -18,7 +18,7 @@ This tool is intentionally **human-supervised**: it prefers to be helpful and ex
 - [x] Design proposed repo layout
 - [x] Implement static analysis (AST + go/types): build a type graph once
 - [x] Implement matching & suggestions (best-effort engine)
-- [ ] Define YAML mapping definitions (authoritative, human-reviewed)
+- [x] Define YAML mapping definitions (authoritative, human-reviewed)
 - [ ] Implement resolution pipeline (YAML wins, then suggestions)
 - [ ] Implement code generation (fast casters)
 - [ ] Design CLI workflows (semi-automated)
@@ -184,11 +184,20 @@ Checklist
 YAML is a first-class feature. It turns best-effort suggestions into deterministic regeneration.
 
 ### MVP YAML capabilities
-- pin explicit field mappings
+- pin explicit field mappings (1:1, 1:N, N:1, N:M)
+- simplified "121" shorthand for 1:1 mappings
 - ignore target fields
 - set defaults
 - apply named transforms
 - support path expressions for nested shapes
+- priority-based conflict resolution
+
+### Priority order
+When resolving field mappings, conflicts are resolved using this priority:
+1. "121" shorthand mappings (highest)
+2. "fields" explicit mappings
+3. "ignore" list
+4. "auto" best-effort matches (lowest)
 
 ### Path syntax (MVP)
 - `Field`
@@ -198,19 +207,25 @@ YAML is a first-class feature. It turns best-effort suggestions into determinist
 
 ### Cardinality rules
 Support via YAML (explicit):
-- 1 → many (one source feeds multiple targets)
-- many → 1 (multiple sources feed one target) — typically requires transform
-- many ↔ many (collection conversions) — typically element-level mapping + transform
+- 1:1 — single source to single target (auto-resolvable for primitives)
+- 1:N — one source feeds multiple targets (no transform required)
+- N:1 — multiple sources feed one target (transform required)
+- N:M — multiple sources to multiple targets (transform required)
 
 ### Transform registry
 YAML references transforms by name. The generator validates:
 - transform exists (or generates a stub)
 - signature matches expected types
+- auto-generates unique names for N:1/N:M mappings (e.g., "FirstNameLastNameToFullName")
 
 Checklist
-- [ ] Define YAML schema structs and load with `yaml.v3`
-- [ ] Validate field paths against analyzed type graph
-- [ ] Implement transform registry concept (names + signature checks)
+- [x] Define YAML schema structs and load with `yaml.v3`
+- [x] Validate field paths against analyzed type graph
+- [x] Implement transform registry concept (names + signature checks)
+- [x] Support string/array for source/target (1:1, 1:N, N:1, N:M)
+- [x] Support "121" shorthand syntax
+- [x] Implement priority-based conflict resolution
+- [x] Support "auto" section for best-effort matches
 
 ---
 
@@ -309,7 +324,7 @@ Start strict and expand only if required:
 
 - [x] Implement package loading + type graph extraction (`internal/analyze`)
 - [x] Implement normalization + Levenshtein + scoring (`internal/match`)
-- [ ] Define YAML schema + validation + transform registry (`internal/mapping`)
+- [x] Define YAML schema + validation + transform registry (`internal/mapping`)
 - [ ] Implement mapping resolution + diagnostics + suggestion export (`internal/plan`)
 - [ ] Implement deterministic caster generator (`internal/gen`)
 - [ ] Add CLI commands: analyze/suggest/gen/check (`cmd/caster-generator`)

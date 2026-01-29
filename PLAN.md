@@ -21,7 +21,7 @@ This tool is intentionally **human-supervised**: it prefers to be helpful and ex
 - [x] Define YAML mapping definitions (authoritative, human-reviewed)
 - [x] Implement resolution pipeline (YAML wins, then suggestions)
 - [x] Implement code generation (fast casters)
-- [ ] Design CLI workflows (semi-automated)
+- [x] Design CLI workflows (semi-automated)
 - [ ] Define 80/20 boundaries (explicit non-goals for v1)
 
 ---
@@ -326,8 +326,8 @@ Suggested flags:
 - `-strict` (fail on any unresolved)
 
 Checklist
-- [ ] Single shared pipeline used by all commands
-- [ ] Clear, structured console output for ambiguities + “why”
+- [x] Single shared pipeline used by all commands
+- [x] Clear, structured console output for ambiguities + "why"
 
 ---
 
@@ -348,5 +348,5 @@ Start strict and expand only if required:
 - [x] Define YAML schema + validation + transform registry (`internal/mapping`)
 - [x] Implement mapping resolution + diagnostics + suggestion export (`internal/plan`)
 - [x] Implement deterministic caster generator (`internal/gen`)
-- [ ] Add CLI commands: analyze/suggest/gen/check (`cmd/caster-generator`)
+- [x] Add CLI commands: analyze/suggest/gen/check (`cmd/caster-generator`)
 - [ ] Document workflow: suggest → review YAML → gen → commit

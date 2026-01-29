@@ -155,6 +155,11 @@ type NestedConversion struct {
 	TargetType *analyze.TypeInfo
 	// ReferencedBy tracks which field mappings need this conversion.
 	ReferencedBy []mapping.FieldPath
+	// IsSliceElement indicates this conversion is for slice elements.
+	IsSliceElement bool
+	// ResolvedPair contains the recursively resolved mapping for this nested pair.
+	// May be nil if resolution was deferred or failed.
+	ResolvedPair *ResolvedTypePair
 }
 
 // Diagnostics holds all diagnostic information from resolution.

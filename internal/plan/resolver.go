@@ -21,6 +21,10 @@ type ResolutionConfig struct {
 	StrictMode bool
 	// MaxCandidates is the maximum number of candidates to include in suggestions.
 	MaxCandidates int
+	// RecursiveResolve enables recursive resolution of nested struct/slice types.
+	RecursiveResolve bool
+	// MaxRecursionDepth limits recursion depth to prevent infinite loops (0 = unlimited).
+	MaxRecursionDepth int
 }
 
 // DefaultConfig returns the default resolution configuration.
@@ -31,6 +35,8 @@ func DefaultConfig() ResolutionConfig {
 		AmbiguityThreshold: match.DefaultAmbiguityThreshold,
 		StrictMode:         false,
 		MaxCandidates:      5,
+		RecursiveResolve:   true,
+		MaxRecursionDepth:  10,
 	}
 }
 
@@ -40,6 +46,8 @@ type Resolver struct {
 	mappingDef *mapping.MappingFile
 	registry   *mapping.TransformRegistry
 	config     ResolutionConfig
+	// resolvedPairs caches already-resolved type pairs to prevent infinite recursion
+	resolvedPairs map[string]*ResolvedTypePair
 }
 
 // NewResolver creates a new Resolver.
@@ -56,10 +64,11 @@ func NewResolver(
 	}
 
 	return &Resolver{
-		graph:      graph,
-		mappingDef: mappingDef,
-		registry:   registry,
-		config:     config,
+		graph:         graph,
+		mappingDef:    mappingDef,
+		registry:      registry,
+		config:        config,
+		resolvedPairs: make(map[string]*ResolvedTypePair),
 	}
 }
 
@@ -91,6 +100,49 @@ func (r *Resolver) Resolve() (*ResolvedMappingPlan, error) {
 	}
 
 	return plan, nil
+}
+
+// resolveTypePairRecursive resolves a nested type pair without explicit YAML mapping.
+// This is used for recursive resolution of nested struct and slice element types.
+func (r *Resolver) resolveTypePairRecursive(
+	sourceType, targetType *analyze.TypeInfo,
+	diags *Diagnostics,
+	depth int,
+) (*ResolvedTypePair, error) {
+	if sourceType == nil || targetType == nil {
+		return nil, fmt.Errorf("source or target type is nil")
+	}
+
+	typePairKey := fmt.Sprintf("%s->%s", sourceType.ID, targetType.ID)
+
+	// Check cache first
+	if cached, exists := r.resolvedPairs[typePairKey]; exists {
+		return cached, nil
+	}
+
+	result := &ResolvedTypePair{
+		SourceType:      sourceType,
+		TargetType:      targetType,
+		Mappings:        []ResolvedFieldMapping{},
+		UnmappedTargets: []UnmappedField{},
+		NestedPairs:     []NestedConversion{},
+	}
+
+	// Pre-cache to prevent infinite recursion for cyclic types
+	r.resolvedPairs[typePairKey] = result
+
+	mappedTargets := make(map[string]bool)
+
+	// Only do auto-matching for nested types (no YAML rules available)
+	r.autoMatchRemainingFields(result, sourceType, targetType, mappedTargets, diags, typePairKey)
+
+	// Recursively detect and resolve nested conversions
+	r.detectNestedConversions(result, diags, depth)
+
+	// Sort for determinism
+	r.sortMappings(result)
+
+	return result, nil
 }
 
 // resolveTypeMapping resolves a single type mapping.
@@ -197,8 +249,8 @@ func (r *Resolver) resolveTypeMapping(
 	// Priority 5: Auto-match remaining target fields
 	r.autoMatchRemainingFields(result, sourceType, targetType, mappedTargets, diags, typePairStr)
 
-	// Detect nested struct conversions
-	r.detectNestedConversions(result)
+	// Detect nested struct conversions (with recursive resolution)
+	r.detectNestedConversions(result, diags, 0)
 
 	// Sort mappings for deterministic output
 	r.sortMappings(result)
@@ -416,7 +468,26 @@ func (r *Resolver) autoMatchRemainingFields(
 		candidates := match.RankCandidates(targetField, sourceFields)
 
 		// Try to auto-match with high confidence
-		if best := candidates.HighConfidence(r.config.MinConfidence, r.config.MinGap); best != nil {
+		best := candidates.HighConfidence(r.config.MinConfidence, r.config.MinGap)
+
+		// Special case: if no high-confidence match but name matches well and both are structs/slices,
+		// allow matching based on structural compatibility
+		if best == nil && len(candidates) > 0 {
+			topCandidate := &candidates[0]
+			// Check if top candidate has high name score (>0.8) and is struct/slice to struct/slice
+			if topCandidate.NameScore >= 0.8 && topCandidate.SourceField.Type != nil && topCandidate.TargetField.Type != nil {
+				srcKind := topCandidate.SourceField.Type.Kind
+				tgtKind := topCandidate.TargetField.Type.Kind
+
+				// Allow struct-to-struct or slice-to-slice with good name match
+				if (srcKind == analyze.TypeKindStruct && tgtKind == analyze.TypeKindStruct) ||
+					(srcKind == analyze.TypeKindSlice && tgtKind == analyze.TypeKindSlice) {
+					best = topCandidate
+				}
+			}
+		}
+
+		if best != nil {
 			// Successful auto-match
 			strategy, compat := r.determineStrategyFromCandidate(best)
 
@@ -486,17 +557,50 @@ func (r *Resolver) determineStrategyFromCandidate(cand *match.Candidate) (Conver
 		if cand.TypeCompat.Reason == "requires pointer dereference" {
 			return StrategyPointerDeref, "pointer deref"
 		}
+
 		if cand.TypeCompat.Reason == "requires taking address" {
 			return StrategyPointerWrap, "pointer wrap"
 		}
+
+		// Check if source and target are both structs (nested struct conversion)
+		if cand.SourceField.Type != nil && cand.TargetField.Type != nil {
+			srcKind := cand.SourceField.Type.Kind
+			tgtKind := cand.TargetField.Type.Kind
+
+			// Handle struct-to-struct
+			if srcKind == analyze.TypeKindStruct && tgtKind == analyze.TypeKindStruct {
+				return StrategyNestedCast, "nested struct"
+			}
+
+			// Handle slice-to-slice
+			if srcKind == analyze.TypeKindSlice && tgtKind == analyze.TypeKindSlice {
+				return StrategySliceMap, "slice map"
+			}
+		}
+
 		return StrategyTransform, cand.TypeCompat.Reason
 	default:
+		// Also check for struct/slice even when marked as incompatible
+		// (types might be different named structs which aren't directly compatible)
+		if cand.SourceField.Type != nil && cand.TargetField.Type != nil {
+			srcKind := cand.SourceField.Type.Kind
+			tgtKind := cand.TargetField.Type.Kind
+
+			if srcKind == analyze.TypeKindStruct && tgtKind == analyze.TypeKindStruct {
+				return StrategyNestedCast, "nested struct"
+			}
+
+			if srcKind == analyze.TypeKindSlice && tgtKind == analyze.TypeKindSlice {
+				return StrategySliceMap, "slice map"
+			}
+		}
+
 		return StrategyTransform, "incompatible"
 	}
 }
 
-// detectNestedConversions identifies nested struct conversions needed.
-func (r *Resolver) detectNestedConversions(result *ResolvedTypePair) {
+// detectNestedConversions identifies nested struct conversions needed and recursively resolves them.
+func (r *Resolver) detectNestedConversions(result *ResolvedTypePair, diags *Diagnostics, depth int) {
 	nestedMap := make(map[string]*NestedConversion)
 
 	for _, m := range result.Mappings {
@@ -507,14 +611,42 @@ func (r *Resolver) detectNestedConversions(result *ResolvedTypePair) {
 				targetFieldType := r.resolveFieldType(m.TargetPaths[0], result.TargetType)
 
 				if sourceFieldType != nil && targetFieldType != nil {
-					key := fmt.Sprintf("%s->%s", sourceFieldType.ID, targetFieldType.ID)
+					// For slice mappings, get the element types
+					isSlice := m.Strategy == StrategySliceMap
+					actualSourceType := sourceFieldType
+					actualTargetType := targetFieldType
+
+					if isSlice {
+						if sourceFieldType.Kind == analyze.TypeKindSlice && sourceFieldType.ElemType != nil {
+							actualSourceType = sourceFieldType.ElemType
+						}
+						if targetFieldType.Kind == analyze.TypeKindSlice && targetFieldType.ElemType != nil {
+							actualTargetType = targetFieldType.ElemType
+						}
+					}
+
+					// Handle pointer element types
+					if actualSourceType.Kind == analyze.TypeKindPointer && actualSourceType.ElemType != nil {
+						actualSourceType = actualSourceType.ElemType
+					}
+					if actualTargetType.Kind == analyze.TypeKindPointer && actualTargetType.ElemType != nil {
+						actualTargetType = actualTargetType.ElemType
+					}
+
+					// Only process struct-to-struct conversions
+					if actualSourceType.Kind != analyze.TypeKindStruct || actualTargetType.Kind != analyze.TypeKindStruct {
+						continue
+					}
+
+					key := fmt.Sprintf("%s->%s", actualSourceType.ID, actualTargetType.ID)
 					if existing, ok := nestedMap[key]; ok {
 						existing.ReferencedBy = append(existing.ReferencedBy, m.TargetPaths[0])
 					} else {
 						nestedMap[key] = &NestedConversion{
-							SourceType:   sourceFieldType,
-							TargetType:   targetFieldType,
-							ReferencedBy: []mapping.FieldPath{m.TargetPaths[0]},
+							SourceType:     actualSourceType,
+							TargetType:     actualTargetType,
+							ReferencedBy:   []mapping.FieldPath{m.TargetPaths[0]},
+							IsSliceElement: isSlice,
 						}
 					}
 				}
@@ -522,7 +654,38 @@ func (r *Resolver) detectNestedConversions(result *ResolvedTypePair) {
 		}
 	}
 
-	for _, nc := range nestedMap {
+	// Recursively resolve nested type pairs
+	for key, nc := range nestedMap {
+		// Check if already resolved (cache lookup)
+		if cached, exists := r.resolvedPairs[key]; exists {
+			nc.ResolvedPair = cached
+			result.NestedPairs = append(result.NestedPairs, *nc)
+
+			continue
+		}
+
+		// Check recursion depth
+		if r.config.MaxRecursionDepth > 0 && depth >= r.config.MaxRecursionDepth {
+			diags.AddWarning("max_recursion_depth",
+				fmt.Sprintf("max recursion depth reached for %s", key),
+				key, "")
+			result.NestedPairs = append(result.NestedPairs, *nc)
+
+			continue
+		}
+
+		// Recursively resolve if enabled
+		if r.config.RecursiveResolve && nc.SourceType.Kind == analyze.TypeKindStruct && nc.TargetType.Kind == analyze.TypeKindStruct {
+			nestedResult, err := r.resolveTypePairRecursive(nc.SourceType, nc.TargetType, diags, depth+1)
+			if err != nil {
+				diags.AddWarning("nested_resolve_error", err.Error(), key, "")
+			} else {
+				nc.ResolvedPair = nestedResult
+				// Cache the result
+				r.resolvedPairs[key] = nestedResult
+			}
+		}
+
 		result.NestedPairs = append(result.NestedPairs, *nc)
 	}
 }

@@ -254,6 +254,9 @@ Checklist
 - [x] Implement `ResolvedMappingPlan` model
 - [x] Confidence thresholds + deterministic ordering
 - [x] Suggestion export format
+- [x] Recursive resolution for nested struct fields
+- [x] Recursive resolution for slice element types
+- [x] Recursion depth limits to prevent infinite loops
 
 ---
 

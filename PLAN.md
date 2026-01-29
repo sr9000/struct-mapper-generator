@@ -13,9 +13,9 @@ This tool is intentionally **human-supervised**: it prefers to be helpful and ex
 
 ## Checklist
 
-- [ ] Define success criteria (contract)
-- [ ] Plan milestones (vertical slices)
-- [ ] Design proposed repo layout
+- [x] Define success criteria (contract)
+- [x] Plan milestones (vertical slices)
+- [x] Design proposed repo layout
 - [ ] Implement static analysis (AST + go/types): build a type graph once
 - [ ] Implement matching & suggestions (best-effort engine)
 - [ ] Define YAML mapping definitions (authoritative, human-reviewed)
@@ -83,24 +83,26 @@ Goal: 1→many, many→1, and many↔many with named transforms.
 
 Keep the public surface tiny; put most logic under `internal/`.
 
-- `cmd/caster-generator/`
-  - CLI entrypoint
-- `internal/analyze/`
-  - Package loading + type graph extraction (AST + `go/types`)
-- `internal/match/`
-  - Name normalization, Levenshtein, scoring, candidate ranking
-- `internal/mapping/`
-  - YAML schema, parsing, validation, transform registry
-- `internal/plan/`
-  - Resolution pipeline: YAML pins + best-effort suggestions + diagnostics
-- `internal/gen/`
-  - Deterministic Go code generation + `go/format`
-- `internal/diagnostic/`
-  - Structured warnings/errors, “why this mapped” explanations
+```
+caster-generator/
+├── cmd/caster-generator/       # CLI entrypoint
+│   └── main.go
+├── internal/
+│   ├── analyze/                # Package loading + type graph extraction (AST + go/types)
+│   ├── match/                  # Name normalization, Levenshtein, scoring, candidate ranking
+│   ├── mapping/                # YAML schema, parsing, validation, transform registry
+│   ├── plan/                   # Resolution pipeline: YAML pins + best-effort suggestions + diagnostics
+│   ├── gen/                    # Deterministic Go code generation + go/format
+│   └── diagnostic/             # Structured warnings/errors, "why this mapped" explanations
+├── generated/                  # Output directory for generated caster code
+├── store/                      # Sample source package for testing
+├── warehouse/                  # Sample target package for testing
+└── ...
+```
 
-Decisions to make early:
-- Where generated code lives: `./generated/` vs `./casters/`
-- Generated package name: same as target, or dedicated `casters` package
+**Design decisions (resolved):**
+- Generated code lives in: `./generated/`
+- Generated package name: dedicated `casters` package (not target package)
 
 ---
 

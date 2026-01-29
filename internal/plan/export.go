@@ -80,14 +80,9 @@ func exportTypePairSuggestions(tp *ResolvedTypePair) mapping.TypeMapping {
 		}
 	}
 
-	// Add unmapped fields as comments/suggestions
+	// Add unmapped fields as ignored - user can review and move to fields if needed
 	for _, um := range tp.UnmappedTargets {
-		// Create a placeholder entry for user to review
-		fm := mapping.FieldMapping{
-			Target: mapping.FieldRefArray{{Path: um.TargetPath.String(), Hint: mapping.HintNone}},
-			Ignore: true, // Default to ignore, user can change
-		}
-		tm.Auto = append(tm.Auto, fm)
+		tm.Ignore = append(tm.Ignore, um.TargetPath.String())
 	}
 
 	return tm
@@ -142,11 +137,6 @@ func exportFieldMapping(m *ResolvedFieldMapping) mapping.FieldMapping {
 	// Set transform
 	if m.Transform != "" {
 		fm.Transform = m.Transform
-	}
-
-	// Set ignore
-	if m.Strategy == StrategyIgnore {
-		fm.Ignore = true
 	}
 
 	return fm

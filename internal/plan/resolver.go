@@ -322,16 +322,6 @@ func (r *Resolver) resolveFieldMapping(
 		targetPaths = append(targetPaths, tp)
 	}
 
-	// Handle ignore
-	if fm.Ignore {
-		return &ResolvedFieldMapping{
-			TargetPaths: targetPaths,
-			Source:      source,
-			Strategy:    StrategyIgnore,
-			Explanation: "explicitly ignored",
-		}, nil
-	}
-
 	// Handle default value
 	if fm.Default != nil {
 		return &ResolvedFieldMapping{

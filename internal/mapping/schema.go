@@ -273,9 +273,6 @@ type FieldMapping struct {
 	// Required for many:1 mappings. For many:many, a unique transform
 	// name is auto-generated if not specified.
 	Transform string `yaml:"transform,omitempty"`
-
-	// Ignore can be set to true to explicitly skip this target field.
-	Ignore bool `yaml:"ignore,omitempty"`
 }
 
 // StringOrArray is a type that can be unmarshaled from either a string or an array of strings.

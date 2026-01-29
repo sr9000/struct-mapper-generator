@@ -207,15 +207,6 @@ func validateFieldMapping(
 		}
 	}
 
-	// If ignore is set, no other fields should be set
-	if fm.Ignore {
-		if !fm.Source.IsEmpty() || fm.Default != nil || fm.Transform != "" {
-			result.AddWarning(basePath, "ignore is set; source, default, and transform are ignored")
-		}
-
-		return
-	}
-
 	// Count how many value sources are specified
 	hasSource := !fm.Source.IsEmpty()
 	hasDefault := fm.Default != nil

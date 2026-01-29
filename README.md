@@ -726,11 +726,8 @@ mappings:
         
       - target: Field
         default: "value"            # Literal default
-        
-      - target: Field
-        ignore: true                # Explicit ignore
     
-    # Fields to skip
+    # Fields to skip (source fields to ignore)
     ignore:
       - InternalField
       - TempData

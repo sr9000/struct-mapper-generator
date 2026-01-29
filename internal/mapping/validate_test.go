@@ -280,9 +280,8 @@ func TestValidate_FieldMappingWithIgnore(t *testing.T) {
 mappings:
   - source: store.Order
     target: warehouse.Order
-    fields:
-      - target: Status
-        ignore: true
+    ignore:
+      - Status
 `
 	mf, err := Parse([]byte(yaml))
 	require.NoError(t, err)

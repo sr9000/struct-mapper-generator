@@ -13,6 +13,7 @@
 //   - Apply named transforms
 //   - Support path expressions for nested shapes (e.g., "Items[].ProductID")
 //   - Priority-based conflict resolution (121 > fields > ignore > auto)
+//   - Introspection hints (dive/final) to control recursive resolution
 //
 // # Schema Overview
 //
@@ -30,11 +31,13 @@
 //	    fields:
 //	      - target: Status
 //	        default: "pending"
-//	      - target: [DisplayName, FullName]  # 1:many
+//	      - target: [{DisplayName: dive}, FullName]  # 1:many with hint
 //	        source: Name
-//	      - target: Address                  # many:1 (requires transform)
+//	      - target: Address                          # many:1 (requires transform)
 //	        source: [Street, City, State]
 //	        transform: ConcatAddress
+//	      - target: {Metadata: final}                # treat as single unit
+//	        source: Meta
 //	    # Fields to ignore
 //	    ignore:
 //	      - InternalField
@@ -46,6 +49,24 @@
 //	  - name: ConcatAddress
 //	    source_type: string
 //	    target_type: string
+//
+// # Introspection Hints
+//
+// Field paths can include optional hints to control recursive resolution:
+//   - Simple field: "Name" or ["Name", "FullName"]
+//   - With hint: {Name: dive} or [{DisplayName: dive}, FullName]
+//
+// Available hints:
+//   - "dive": force recursive introspection of inner struct fields
+//   - "final": treat as single unit requiring custom transform (no introspection)
+//
+// Hint resolution by cardinality:
+//   - 1:N - introspects source type (first), not cloning value into all targets
+//   - N:1 - introspects target type (last)
+//   - 1:1 - possibly introspects if both are structs (unless hint says final)
+//   - N:M - treated as final unless explicit dive hint (conflicting hints → final)
+//
+// Decisions are written back to YAML, allowing iterative refinement.
 //
 // # Priority Order
 //

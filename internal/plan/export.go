@@ -3,9 +3,9 @@ package plan
 import (
 	"fmt"
 
-	"caster-generator/internal/mapping"
-
 	"gopkg.in/yaml.v3"
+
+	"caster-generator/internal/mapping"
 )
 
 // ExportSuggestions generates a suggested YAML mapping file from a resolved plan.
@@ -83,7 +83,7 @@ func exportTypePairSuggestions(tp *ResolvedTypePair) mapping.TypeMapping {
 	for _, um := range tp.UnmappedTargets {
 		// Create a placeholder entry for user to review
 		fm := mapping.FieldMapping{
-			Target: mapping.StringOrArray{um.TargetPath.String()},
+			Target: mapping.FieldRefArray{{Path: um.TargetPath.String(), Hint: mapping.HintNone}},
 			Ignore: true, // Default to ignore, user can change
 		}
 		tm.Auto = append(tm.Auto, fm)
@@ -96,18 +96,33 @@ func exportTypePairSuggestions(tp *ResolvedTypePair) mapping.TypeMapping {
 func exportFieldMapping(m *ResolvedFieldMapping) mapping.FieldMapping {
 	fm := mapping.FieldMapping{}
 
-	// Set targets
-	targets := make([]string, len(m.TargetPaths))
+	// Set targets with hints
+	targets := make(mapping.FieldRefArray, len(m.TargetPaths))
 	for i, tp := range m.TargetPaths {
-		targets[i] = tp.String()
+		hint := mapping.HintNone
+		// Apply effective hint to the first target (following cardinality rules)
+		if i == 0 && m.EffectiveHint != mapping.HintNone {
+			// For N:1, hint goes on target; for others, we'll put it on first item
+			if m.Cardinality == mapping.CardinalityManyToOne || m.Cardinality == mapping.CardinalityOneToOne {
+				hint = m.EffectiveHint
+			}
+		}
+		targets[i] = mapping.FieldRef{Path: tp.String(), Hint: hint}
 	}
 	fm.Target = targets
 
-	// Set sources
+	// Set sources with hints
 	if len(m.SourcePaths) > 0 {
-		sources := make([]string, len(m.SourcePaths))
+		sources := make(mapping.FieldRefArray, len(m.SourcePaths))
 		for i, sp := range m.SourcePaths {
-			sources[i] = sp.String()
+			hint := mapping.HintNone
+			// Apply effective hint to the first source for 1:N or 1:1
+			if i == 0 && m.EffectiveHint != mapping.HintNone {
+				if m.Cardinality == mapping.CardinalityOneToMany || m.Cardinality == mapping.CardinalityOneToOne {
+					hint = m.EffectiveHint
+				}
+			}
+			sources[i] = mapping.FieldRef{Path: sp.String(), Hint: hint}
 		}
 		fm.Source = sources
 	}

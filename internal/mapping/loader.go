@@ -125,6 +125,122 @@ func (s StringOrArray) Contains(str string) bool {
 	return false
 }
 
+// UnmarshalYAML implements custom YAML unmarshaling for FieldRefArray.
+// Accepts:
+//   - Single string: "Name"
+//   - Single with hint: {Name: dive}
+//   - Array of strings: ["Name", "FullName"]
+//   - Array with hints: [{DisplayName: dive}, FullName]
+func (f *FieldRefArray) UnmarshalYAML(node *yaml.Node) error {
+	switch node.Kind {
+	case yaml.ScalarNode:
+		// Single string value: "Name"
+		var str string
+		if err := node.Decode(&str); err != nil {
+			return err
+		}
+		if str != "" {
+			*f = FieldRefArray{{Path: str, Hint: HintNone}}
+		} else {
+			*f = FieldRefArray{}
+		}
+		return nil
+
+	case yaml.MappingNode:
+		// Single map: {Name: dive}
+		ref, err := parseFieldRefFromMap(node)
+		if err != nil {
+			return err
+		}
+		*f = FieldRefArray{ref}
+		return nil
+
+	case yaml.SequenceNode:
+		// Array of items
+		var refs []FieldRef
+		for _, item := range node.Content {
+			switch item.Kind {
+			case yaml.ScalarNode:
+				// String item: "Name"
+				var str string
+				if err := item.Decode(&str); err != nil {
+					return err
+				}
+				refs = append(refs, FieldRef{Path: str, Hint: HintNone})
+
+			case yaml.MappingNode:
+				// Map item: {Name: dive}
+				ref, err := parseFieldRefFromMap(item)
+				if err != nil {
+					return err
+				}
+				refs = append(refs, ref)
+
+			default:
+				return fmt.Errorf("expected string or map in array, got %v", item.Kind)
+			}
+		}
+		*f = refs
+		return nil
+
+	default:
+		return fmt.Errorf("expected string, map, or array, got %v", node.Kind)
+	}
+}
+
+// parseFieldRefFromMap parses a YAML mapping node like {Name: dive} into a FieldRef.
+func parseFieldRefFromMap(node *yaml.Node) (FieldRef, error) {
+	if node.Kind != yaml.MappingNode || len(node.Content) != 2 {
+		return FieldRef{}, fmt.Errorf("expected single key-value map like {Name: dive}")
+	}
+
+	var path string
+	var hint string
+	if err := node.Content[0].Decode(&path); err != nil {
+		return FieldRef{}, fmt.Errorf("invalid field path: %w", err)
+	}
+	if err := node.Content[1].Decode(&hint); err != nil {
+		return FieldRef{}, fmt.Errorf("invalid hint value: %w", err)
+	}
+
+	h := IntrospectionHint(hint)
+	if !h.IsValid() {
+		return FieldRef{}, fmt.Errorf("invalid hint %q (expected 'dive' or 'final')", hint)
+	}
+
+	return FieldRef{Path: path, Hint: h}, nil
+}
+
+// MarshalYAML implements custom YAML marshaling for FieldRefArray.
+// Outputs:
+//   - Single string if length is 1 and no hint
+//   - Single map if length is 1 with hint
+//   - Array otherwise
+func (f FieldRefArray) MarshalYAML() (interface{}, error) {
+	if len(f) == 0 {
+		return nil, nil
+	}
+
+	if len(f) == 1 {
+		if f[0].Hint == HintNone {
+			return f[0].Path, nil
+		}
+		// Return map for single item with hint
+		return map[string]string{f[0].Path: string(f[0].Hint)}, nil
+	}
+
+	// Array of items
+	result := make([]interface{}, len(f))
+	for i, ref := range f {
+		if ref.Hint == HintNone {
+			result[i] = ref.Path
+		} else {
+			result[i] = map[string]string{ref.Path: string(ref.Hint)}
+		}
+	}
+	return result, nil
+}
+
 // ParsePath parses a field path string into a FieldPath.
 // Supports: "Field", "Nested.Field", "Items[]", "Items[].ProductID".
 func ParsePath(path string) (FieldPath, error) {
@@ -174,6 +290,22 @@ func ParsePaths(paths StringOrArray) ([]FieldPath, error) {
 
 	for _, p := range paths {
 		fp, err := ParsePath(p)
+		if err != nil {
+			return nil, err
+		}
+
+		result = append(result, fp)
+	}
+
+	return result, nil
+}
+
+// ParsePathsFromRefs parses multiple field paths from a FieldRefArray.
+func ParsePathsFromRefs(refs FieldRefArray) ([]FieldPath, error) {
+	result := make([]FieldPath, 0, len(refs))
+
+	for _, ref := range refs {
+		fp, err := ParsePath(ref.Path)
 		if err != nil {
 			return nil, err
 		}
@@ -245,8 +377,8 @@ func NormalizeTypeMapping(tm *TypeMapping) {
 
 		for source, target := range tm.OneToOne {
 			expanded = append(expanded, FieldMapping{
-				Source: StringOrArray{source},
-				Target: StringOrArray{target},
+				Source: FieldRefArray{{Path: source, Hint: HintNone}},
+				Target: FieldRefArray{{Path: target, Hint: HintNone}},
 			})
 		}
 

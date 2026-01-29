@@ -72,16 +72,16 @@ transforms:
 
 	// 1:many mapping
 	assert.Len(t, tm.Fields[2].Target, 2)
-	assert.Equal(t, "FirstName", tm.Fields[2].Target[0])
-	assert.Equal(t, "DisplayName", tm.Fields[2].Target[1])
+	assert.Equal(t, "FirstName", tm.Fields[2].Target[0].Path)
+	assert.Equal(t, "DisplayName", tm.Fields[2].Target[1].Path)
 	assert.Equal(t, "Name", tm.Fields[2].Source.First())
 	assert.Equal(t, CardinalityOneToMany, tm.Fields[2].GetCardinality())
 
 	// many:1 mapping
 	assert.Equal(t, "FullName", tm.Fields[3].Target.First())
 	assert.Len(t, tm.Fields[3].Source, 2)
-	assert.Equal(t, "FirstName", tm.Fields[3].Source[0])
-	assert.Equal(t, "LastName", tm.Fields[3].Source[1])
+	assert.Equal(t, "FirstName", tm.Fields[3].Source[0].Path)
+	assert.Equal(t, "LastName", tm.Fields[3].Source[1].Path)
 	assert.Equal(t, CardinalityManyToOne, tm.Fields[3].GetCardinality())
 
 	// Check transforms
@@ -113,7 +113,7 @@ func TestParseStringOrArray(t *testing.T) {
 	tests := []struct {
 		name     string
 		yaml     string
-		expected StringOrArray
+		expected FieldRefArray
 	}{
 		{
 			name: "single string",
@@ -125,7 +125,7 @@ mappings:
       - target: Name
         source: Name
 `,
-			expected: StringOrArray{"Name"},
+			expected: FieldRefArray{{Path: "Name"}},
 		},
 		{
 			name: "array",
@@ -137,7 +137,7 @@ mappings:
       - target: [First, Second]
         source: Value
 `,
-			expected: StringOrArray{"First", "Second"},
+			expected: FieldRefArray{{Path: "First"}, {Path: "Second"}},
 		},
 	}
 
@@ -287,8 +287,8 @@ func TestMarshal(t *testing.T) {
 				Source: "store.Order",
 				Target: "warehouse.Order",
 				Fields: []FieldMapping{
-					{Target: StringOrArray{"ID"}, Source: StringOrArray{"OrderID"}},
-					{Target: StringOrArray{"Status"}, Default: &defaultVal},
+					{Target: FieldRefArray{{Path: "ID"}}, Source: FieldRefArray{{Path: "OrderID"}}},
+					{Target: FieldRefArray{{Path: "Status"}}, Default: &defaultVal},
 				},
 			},
 		},
@@ -329,7 +329,7 @@ func TestNormalizeTypeMapping(t *testing.T) {
 			"Src2": "Tgt2",
 		},
 		Fields: []FieldMapping{
-			{Target: StringOrArray{"Existing"}, Source: StringOrArray{"ExistingSrc"}},
+			{Target: FieldRefArray{{Path: "Existing"}}, Source: FieldRefArray{{Path: "ExistingSrc"}}},
 		},
 	}
 
@@ -351,15 +351,15 @@ func TestNormalizeTypeMapping(t *testing.T) {
 func TestCardinality(t *testing.T) {
 	tests := []struct {
 		name     string
-		source   StringOrArray
-		target   StringOrArray
+		source   FieldRefArray
+		target   FieldRefArray
 		expected Cardinality
 	}{
-		{"1:1", StringOrArray{"A"}, StringOrArray{"B"}, CardinalityOneToOne},
-		{"1:N", StringOrArray{"A"}, StringOrArray{"B", "C"}, CardinalityOneToMany},
-		{"N:1", StringOrArray{"A", "B"}, StringOrArray{"C"}, CardinalityManyToOne},
-		{"N:M", StringOrArray{"A", "B"}, StringOrArray{"C", "D"}, CardinalityManyToMany},
-		{"empty source 1:1", StringOrArray{}, StringOrArray{"B"}, CardinalityOneToOne},
+		{"1:1", FieldRefArray{{Path: "A"}}, FieldRefArray{{Path: "B"}}, CardinalityOneToOne},
+		{"1:N", FieldRefArray{{Path: "A"}}, FieldRefArray{{Path: "B"}, {Path: "C"}}, CardinalityOneToMany},
+		{"N:1", FieldRefArray{{Path: "A"}, {Path: "B"}}, FieldRefArray{{Path: "C"}}, CardinalityManyToOne},
+		{"N:M", FieldRefArray{{Path: "A"}, {Path: "B"}}, FieldRefArray{{Path: "C"}, {Path: "D"}}, CardinalityManyToMany},
+		{"empty source 1:1", FieldRefArray{}, FieldRefArray{{Path: "B"}}, CardinalityOneToOne},
 	}
 
 	for _, tt := range tests {
@@ -373,14 +373,14 @@ func TestCardinality(t *testing.T) {
 func TestNeedsTransform(t *testing.T) {
 	tests := []struct {
 		name     string
-		source   StringOrArray
-		target   StringOrArray
+		source   FieldRefArray
+		target   FieldRefArray
 		expected bool
 	}{
-		{"1:1 no transform", StringOrArray{"A"}, StringOrArray{"B"}, false},
-		{"1:N no transform", StringOrArray{"A"}, StringOrArray{"B", "C"}, false},
-		{"N:1 needs transform", StringOrArray{"A", "B"}, StringOrArray{"C"}, true},
-		{"N:M needs transform", StringOrArray{"A", "B"}, StringOrArray{"C", "D"}, true},
+		{"1:1 no transform", FieldRefArray{{Path: "A"}}, FieldRefArray{{Path: "B"}}, false},
+		{"1:N no transform", FieldRefArray{{Path: "A"}}, FieldRefArray{{Path: "B"}, {Path: "C"}}, false},
+		{"N:1 needs transform", FieldRefArray{{Path: "A"}, {Path: "B"}}, FieldRefArray{{Path: "C"}}, true},
+		{"N:M needs transform", FieldRefArray{{Path: "A"}, {Path: "B"}}, FieldRefArray{{Path: "C"}, {Path: "D"}}, true},
 	}
 
 	for _, tt := range tests {
@@ -424,4 +424,183 @@ func TestFieldPathEquals(t *testing.T) {
 	assert.True(t, path1.Equals(path2))
 	assert.False(t, path1.Equals(path3))
 	assert.False(t, path1.Equals(path4))
+}
+
+func TestFieldRefArrayWithHints(t *testing.T) {
+	tests := []struct {
+		name     string
+		yaml     string
+		expected FieldRefArray
+	}{
+		{
+			name: "single string",
+			yaml: `
+mappings:
+  - source: A
+    target: B
+    fields:
+      - target: Name
+        source: Name
+`,
+			expected: FieldRefArray{{Path: "Name", Hint: HintNone}},
+		},
+		{
+			name: "single with dive hint",
+			yaml: `
+mappings:
+  - source: A
+    target: B
+    fields:
+      - target: {Address: dive}
+        source: Addr
+`,
+			expected: FieldRefArray{{Path: "Address", Hint: HintDive}},
+		},
+		{
+			name: "single with final hint",
+			yaml: `
+mappings:
+  - source: A
+    target: B
+    fields:
+      - target: {Metadata: final}
+        source: Meta
+`,
+			expected: FieldRefArray{{Path: "Metadata", Hint: HintFinal}},
+		},
+		{
+			name: "array with mixed hints",
+			yaml: `
+mappings:
+  - source: A
+    target: B
+    fields:
+      - target: [{DisplayName: dive}, FullName]
+        source: Name
+`,
+			expected: FieldRefArray{
+				{Path: "DisplayName", Hint: HintDive},
+				{Path: "FullName", Hint: HintNone},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mf, err := Parse([]byte(tt.yaml))
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, mf.TypeMappings[0].Fields[0].Target)
+		})
+	}
+}
+
+func TestFieldRefArrayMarshal(t *testing.T) {
+	// Single without hint should marshal as string
+	single := FieldRefArray{{Path: "Name"}}
+	data, err := single.MarshalYAML()
+	require.NoError(t, err)
+	assert.Equal(t, "Name", data)
+
+	// Single with hint should marshal as map
+	singleHint := FieldRefArray{{Path: "Address", Hint: HintDive}}
+	data, err = singleHint.MarshalYAML()
+	require.NoError(t, err)
+	assert.Equal(t, map[string]string{"Address": "dive"}, data)
+
+	// Array should marshal as array
+	multi := FieldRefArray{
+		{Path: "DisplayName", Hint: HintDive},
+		{Path: "FullName"},
+	}
+	data, err = multi.MarshalYAML()
+	require.NoError(t, err)
+	expected := []interface{}{
+		map[string]string{"DisplayName": "dive"},
+		"FullName",
+	}
+	assert.Equal(t, expected, data)
+}
+
+func TestFieldRefArrayMethods(t *testing.T) {
+	empty := FieldRefArray{}
+	assert.True(t, empty.IsEmpty())
+	assert.False(t, empty.IsSingle())
+	assert.False(t, empty.IsMultiple())
+	assert.Equal(t, "", empty.First())
+	assert.False(t, empty.HasAnyHint())
+
+	single := FieldRefArray{{Path: "Name"}}
+	assert.False(t, single.IsEmpty())
+	assert.True(t, single.IsSingle())
+	assert.False(t, single.IsMultiple())
+	assert.Equal(t, "Name", single.First())
+	assert.False(t, single.HasAnyHint())
+
+	singleHint := FieldRefArray{{Path: "Name", Hint: HintDive}}
+	assert.True(t, singleHint.HasAnyHint())
+
+	multi := FieldRefArray{{Path: "A"}, {Path: "B", Hint: HintFinal}}
+	assert.True(t, multi.IsMultiple())
+	assert.True(t, multi.HasAnyHint())
+	assert.Equal(t, []string{"A", "B"}, multi.Paths())
+}
+
+func TestGetEffectiveHint(t *testing.T) {
+	tests := []struct {
+		name     string
+		source   FieldRefArray
+		target   FieldRefArray
+		expected IntrospectionHint
+	}{
+		{
+			name:     "no hints",
+			source:   FieldRefArray{{Path: "A"}},
+			target:   FieldRefArray{{Path: "B"}},
+			expected: HintNone,
+		},
+		{
+			name:     "1:1 source hint",
+			source:   FieldRefArray{{Path: "A", Hint: HintDive}},
+			target:   FieldRefArray{{Path: "B"}},
+			expected: HintDive,
+		},
+		{
+			name:     "1:1 target hint",
+			source:   FieldRefArray{{Path: "A"}},
+			target:   FieldRefArray{{Path: "B", Hint: HintFinal}},
+			expected: HintFinal,
+		},
+		{
+			name:     "1:N source hint applies",
+			source:   FieldRefArray{{Path: "A", Hint: HintDive}},
+			target:   FieldRefArray{{Path: "B"}, {Path: "C"}},
+			expected: HintDive,
+		},
+		{
+			name:     "N:1 target hint applies",
+			source:   FieldRefArray{{Path: "A"}, {Path: "B"}},
+			target:   FieldRefArray{{Path: "C", Hint: HintDive}},
+			expected: HintDive,
+		},
+		{
+			name:   "N:M defaults to final",
+			source: FieldRefArray{{Path: "A"}, {Path: "B"}},
+			target: FieldRefArray{{Path: "C"}, {Path: "D"}},
+			// N:M without hints defaults to final
+			expected: HintFinal,
+		},
+		{
+			name:     "conflicting hints resolve to final",
+			source:   FieldRefArray{{Path: "A", Hint: HintDive}},
+			target:   FieldRefArray{{Path: "B", Hint: HintFinal}},
+			expected: HintFinal,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.source.GetEffectiveHint(tt.target)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }

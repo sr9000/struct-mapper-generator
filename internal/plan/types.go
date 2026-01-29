@@ -49,6 +49,9 @@ type ResolvedFieldMapping struct {
 	Confidence float64
 	// Explanation describes why this mapping was chosen.
 	Explanation string
+	// EffectiveHint is the introspection hint computed for this mapping.
+	// Controls whether nested fields are recursively resolved or treated as single units.
+	EffectiveHint mapping.IntrospectionHint
 }
 
 // MappingSource indicates where a mapping rule originated.

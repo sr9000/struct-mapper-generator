@@ -187,8 +187,8 @@ func TestResolverPriority(t *testing.T) {
 				},
 				Fields: []mapping.FieldMapping{
 					{
-						Target: mapping.StringOrArray{"X"}, // Should be overridden by 121
-						Source: mapping.StringOrArray{"Y"},
+						Target: mapping.FieldRefArray{{Path: "X"}}, // Should be overridden by 121
+						Source: mapping.FieldRefArray{{Path: "Y"}},
 					},
 				},
 				Ignore: []string{"Y"}, // Y is ignored
@@ -335,7 +335,7 @@ func TestResolverDefaultValue(t *testing.T) {
 				Target: "target.T",
 				Fields: []mapping.FieldMapping{
 					{
-						Target:  mapping.StringOrArray{"Status"},
+						Target:  mapping.FieldRefArray{{Path: "Status"}},
 						Default: &defaultVal,
 					},
 				},

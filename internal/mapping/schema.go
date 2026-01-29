@@ -42,17 +42,210 @@ type TypeMapping struct {
 	Auto []FieldMapping `yaml:"auto,omitempty"`
 }
 
+// IntrospectionHint indicates how the engine should handle field introspection.
+type IntrospectionHint string
+
+const (
+	// HintNone means no hint provided; engine decides based on cardinality and types.
+	HintNone IntrospectionHint = ""
+	// HintDive forces the engine to inspect inner structure of the field (recursively map fields).
+	HintDive IntrospectionHint = "dive"
+	// HintFinal treats the field as a single unit requiring custom transform (no introspection).
+	HintFinal IntrospectionHint = "final"
+)
+
+// IsValid returns true if the hint is a recognized value.
+func (h IntrospectionHint) IsValid() bool {
+	return h == HintNone || h == HintDive || h == HintFinal
+}
+
+// FieldRef represents a field path with an optional introspection hint.
+// YAML formats supported:
+//   - Simple string: "Name"
+//   - With hint: {Name: dive} or {Name: final}
+type FieldRef struct {
+	// Path is the field path (e.g., "Name", "Address.Street", "Items[]").
+	Path string
+	// Hint is the optional introspection hint for this field.
+	Hint IntrospectionHint
+}
+
+// String returns the path string.
+func (f FieldRef) String() string {
+	return f.Path
+}
+
+// FieldRefArray is a collection of FieldRef that can be unmarshaled from various YAML formats:
+//   - Single string: "Name"
+//   - Single with hint: {Name: dive}
+//   - Array of strings: ["Name", "FullName"]
+//   - Array with hints: [{DisplayName: dive}, FullName]
+type FieldRefArray []FieldRef
+
+// Paths returns just the path strings (for backward compatibility).
+func (f FieldRefArray) Paths() []string {
+	result := make([]string, len(f))
+	for i, ref := range f {
+		result[i] = ref.Path
+	}
+	return result
+}
+
+// First returns the first element's path or empty string if empty.
+func (f FieldRefArray) First() string {
+	if len(f) == 0 {
+		return ""
+	}
+	return f[0].Path
+}
+
+// FirstRef returns the first element or zero FieldRef if empty.
+func (f FieldRefArray) FirstRef() FieldRef {
+	if len(f) == 0 {
+		return FieldRef{}
+	}
+	return f[0]
+}
+
+// IsEmpty returns true if the array is empty.
+func (f FieldRefArray) IsEmpty() bool {
+	return len(f) == 0
+}
+
+// IsSingle returns true if the array has exactly one element.
+func (f FieldRefArray) IsSingle() bool {
+	return len(f) == 1
+}
+
+// IsMultiple returns true if the array has more than one element.
+func (f FieldRefArray) IsMultiple() bool {
+	return len(f) > 1
+}
+
+// HasAnyHint returns true if any field has a non-empty hint.
+func (f FieldRefArray) HasAnyHint() bool {
+	for _, ref := range f {
+		if ref.Hint != HintNone {
+			return true
+		}
+	}
+	return false
+}
+
+// HasConflictingHints returns true if there are both dive and final hints.
+func (f FieldRefArray) HasConflictingHints() bool {
+	hasDive := false
+	hasFinal := false
+	for _, ref := range f {
+		if ref.Hint == HintDive {
+			hasDive = true
+		}
+		if ref.Hint == HintFinal {
+			hasFinal = true
+		}
+	}
+	return hasDive && hasFinal
+}
+
+// GetEffectiveHint returns the effective hint for resolution based on cardinality rules.
+// For 1:N mappings, uses the source (first type) hint.
+// For N:1 mappings, uses the target (last type) hint.
+// Returns HintNone if no hints or conflicting hints.
+func (sources FieldRefArray) GetEffectiveHint(targets FieldRefArray) IntrospectionHint {
+	// Check for conflicting hints across both arrays
+	allRefs := append(append([]FieldRef{}, sources...), targets...)
+	hasDive := false
+	hasFinal := false
+	for _, ref := range allRefs {
+		if ref.Hint == HintDive {
+			hasDive = true
+		}
+		if ref.Hint == HintFinal {
+			hasFinal = true
+		}
+	}
+	if hasDive && hasFinal {
+		// Conflicting hints - treat as final (no introspection)
+		return HintFinal
+	}
+
+	srcCount := len(sources)
+	tgtCount := len(targets)
+
+	// 1:N - introspect source (first type)
+	if srcCount <= 1 && tgtCount > 1 {
+		if srcCount == 1 && sources[0].Hint != HintNone {
+			return sources[0].Hint
+		}
+		// Check targets for hints
+		for _, t := range targets {
+			if t.Hint != HintNone {
+				return t.Hint
+			}
+		}
+		return HintNone
+	}
+
+	// N:1 - introspect target (last type)
+	if srcCount > 1 && tgtCount <= 1 {
+		if tgtCount == 1 && targets[0].Hint != HintNone {
+			return targets[0].Hint
+		}
+		// Check sources for hints
+		for _, s := range sources {
+			if s.Hint != HintNone {
+				return s.Hint
+			}
+		}
+		return HintNone
+	}
+
+	// 1:1 - any hint applies
+	if srcCount <= 1 && tgtCount <= 1 {
+		if srcCount == 1 && sources[0].Hint != HintNone {
+			return sources[0].Hint
+		}
+		if tgtCount == 1 && targets[0].Hint != HintNone {
+			return targets[0].Hint
+		}
+		return HintNone
+	}
+
+	// N:M - conflicting by default, needs explicit hint or final
+	if hasDive {
+		return HintDive
+	}
+	if hasFinal {
+		return HintFinal
+	}
+	return HintFinal // Default to final for N:M
+}
+
 // FieldMapping defines how target field(s) are populated from source field(s).
 // Supports all cardinalities: 1:1, 1:many, many:1, many:many.
+//
+// Field paths can include optional introspection hints:
+//   - Simple: "Name" or ["Name", "FullName"]
+//   - With hint: {Name: dive} or [{DisplayName: dive}, FullName]
+//
+// Hints control recursive resolution:
+//   - "dive": force recursive introspection of inner struct fields
+//   - "final": treat as single unit requiring custom transform (no introspection)
+//
+// Introspection rules by cardinality:
+//   - 1:N - introspects the source (first) type, not cloning into all targets
+//   - N:1 - introspects the target (last) type
+//   - 1:1 - possibly introspects if both are structs (unless hint says final)
+//   - N:M - treated as final unless explicit dive hint
 type FieldMapping struct {
-	// Target is the target field path(s). Can be a single string or array.
-	// Examples: "Name", ["FirstName", "DisplayName"], "Address.Street"
-	Target StringOrArray `yaml:"target"`
+	// Target is the target field path(s) with optional hints.
+	// Examples: "Name", ["FirstName", "DisplayName"], {Address: dive}
+	Target FieldRefArray `yaml:"target"`
 
-	// Source is the source field path(s). Can be a single string or array.
-	// Examples: "Name", ["FirstName", "LastName"], "Addr.Street"
+	// Source is the source field path(s) with optional hints.
+	// Examples: "Name", ["FirstName", "LastName"], {Addr: dive}
 	// If empty, the field is set from Default or via Transform.
-	Source StringOrArray `yaml:"source,omitempty"`
+	Source FieldRefArray `yaml:"source,omitempty"`
 
 	// Default is a literal value to assign if Source is empty.
 	// Supports basic types: strings (quoted), numbers, booleans.
@@ -121,6 +314,12 @@ func (fm *FieldMapping) GetCardinality() Cardinality {
 func (fm *FieldMapping) NeedsTransform() bool {
 	card := fm.GetCardinality()
 	return card == CardinalityManyToOne || card == CardinalityManyToMany
+}
+
+// GetEffectiveHint returns the effective introspection hint for this mapping.
+// Delegates to FieldRefArray.GetEffectiveHint with source/target arrays.
+func (fm *FieldMapping) GetEffectiveHint() IntrospectionHint {
+	return fm.Source.GetEffectiveHint(fm.Target)
 }
 
 // TransformDef defines metadata about a transform function.

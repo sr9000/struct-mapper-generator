@@ -212,6 +212,23 @@ Support via YAML (explicit):
 - N:1 — multiple sources feed one target (transform required)
 - N:M — multiple sources to multiple targets (transform required)
 
+### Introspection hints
+Field paths can include optional hints to control recursive resolution:
+- Simple field: `Name` or `[Name, FullName]`
+- With hint: `{Name: dive}` or `[{DisplayName: dive}, FullName]`
+
+Available hints:
+- `dive`: force recursive introspection of inner struct fields
+- `final`: treat as single unit requiring custom transform (no introspection)
+
+Hint resolution by cardinality:
+- 1:N — introspects source type (first), not cloning value into all targets
+- N:1 — introspects target type (last)
+- 1:1 — possibly introspects if both are structs (unless hint says final)
+- N:M — treated as final unless explicit dive hint (conflicting hints → final)
+
+Decisions are written back to YAML, allowing iterative refinement.
+
 ### Transform registry
 YAML references transforms by name. The generator validates:
 - transform exists (or generates a stub)
@@ -226,6 +243,7 @@ Checklist
 - [x] Support "121" shorthand syntax
 - [x] Implement priority-based conflict resolution
 - [x] Support "auto" section for best-effort matches
+- [x] Support introspection hints (dive/final) for recursive resolution control
 
 ---
 

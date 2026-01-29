@@ -296,9 +296,9 @@ func (r *Resolver) resolveFieldMapping(
 	// Parse target paths
 	var targetPaths []mapping.FieldPath
 	for _, t := range fm.Target {
-		tp, err := mapping.ParsePath(t)
+		tp, err := mapping.ParsePath(t.Path)
 		if err != nil {
-			return nil, fmt.Errorf("invalid target path %q: %w", t, err)
+			return nil, fmt.Errorf("invalid target path %q: %w", t.Path, err)
 		}
 		targetPaths = append(targetPaths, tp)
 	}
@@ -328,14 +328,15 @@ func (r *Resolver) resolveFieldMapping(
 	// Parse source paths
 	var sourcePaths []mapping.FieldPath
 	for _, s := range fm.Source {
-		sp, err := mapping.ParsePath(s)
+		sp, err := mapping.ParsePath(s.Path)
 		if err != nil {
-			return nil, fmt.Errorf("invalid source path %q: %w", s, err)
+			return nil, fmt.Errorf("invalid source path %q: %w", s.Path, err)
 		}
 		sourcePaths = append(sourcePaths, sp)
 	}
 
 	cardinality := fm.GetCardinality()
+	effectiveHint := fm.GetEffectiveHint()
 
 	// Determine strategy
 	var strategy ConversionStrategy
@@ -346,22 +347,29 @@ func (r *Resolver) resolveFieldMapping(
 		explanation = fmt.Sprintf("transform: %s", fm.Transform)
 	} else if len(sourcePaths) == 1 && len(targetPaths) == 1 {
 		var compat string
-		strategy, compat = r.determineStrategy(sourcePaths[0], targetPaths[0], sourceType, targetType)
+		strategy, compat = r.determineStrategyWithHint(sourcePaths[0], targetPaths[0], sourceType, targetType, effectiveHint)
 		explanation = fmt.Sprintf("field mapping: %s (%s)", cardinality, compat)
+		if effectiveHint != mapping.HintNone {
+			explanation += fmt.Sprintf(" [hint: %s]", effectiveHint)
+		}
 	} else {
 		strategy = StrategyTransform
 		explanation = fmt.Sprintf("multi-field mapping: %s", cardinality)
+		if effectiveHint != mapping.HintNone {
+			explanation += fmt.Sprintf(" [hint: %s]", effectiveHint)
+		}
 	}
 
 	return &ResolvedFieldMapping{
-		TargetPaths: targetPaths,
-		SourcePaths: sourcePaths,
-		Source:      source,
-		Cardinality: cardinality,
-		Strategy:    strategy,
-		Transform:   fm.Transform,
-		Confidence:  1.0,
-		Explanation: explanation,
+		TargetPaths:   targetPaths,
+		SourcePaths:   sourcePaths,
+		Source:        source,
+		Cardinality:   cardinality,
+		Strategy:      strategy,
+		Transform:     fm.Transform,
+		Confidence:    1.0,
+		Explanation:   explanation,
+		EffectiveHint: effectiveHint,
 	}, nil
 }
 
@@ -370,12 +378,26 @@ func (r *Resolver) determineStrategy(
 	sourcePath, targetPath mapping.FieldPath,
 	sourceType, targetType *analyze.TypeInfo,
 ) (ConversionStrategy, string) {
+	return r.determineStrategyWithHint(sourcePath, targetPath, sourceType, targetType, mapping.HintNone)
+}
+
+// determineStrategyWithHint determines the conversion strategy, respecting introspection hints.
+func (r *Resolver) determineStrategyWithHint(
+	sourcePath, targetPath mapping.FieldPath,
+	sourceType, targetType *analyze.TypeInfo,
+	hint mapping.IntrospectionHint,
+) (ConversionStrategy, string) {
 	// Get the actual field types
 	sourceFieldType := r.resolveFieldType(sourcePath, sourceType)
 	targetFieldType := r.resolveFieldType(targetPath, targetType)
 
 	if sourceFieldType == nil || targetFieldType == nil {
 		return StrategyTransform, "type info unavailable"
+	}
+
+	// If hint is "final", always use transform (no introspection)
+	if hint == mapping.HintFinal {
+		return StrategyTransform, "final (no introspection)"
 	}
 
 	// Check type compatibility
@@ -397,13 +419,35 @@ func (r *Resolver) determineStrategy(
 			return StrategyPointerWrap, "pointer wrap"
 		}
 		if sourceFieldType.Kind == analyze.TypeKindSlice && targetFieldType.Kind == analyze.TypeKindSlice {
+			// For slices, check if hint says dive (introspect elements) or final
+			if hint == mapping.HintDive {
+				return StrategySliceMap, "slice map (dive)"
+			}
 			return StrategySliceMap, "slice map"
 		}
 		if sourceFieldType.Kind == analyze.TypeKindStruct && targetFieldType.Kind == analyze.TypeKindStruct {
+			// For structs, check if hint says dive (recursively map fields) or final
+			if hint == mapping.HintDive {
+				return StrategyNestedCast, "nested struct (dive)"
+			}
+			// Default behavior: introspect structs unless marked final
 			return StrategyNestedCast, "nested struct"
 		}
 		return StrategyTransform, "needs transform"
 	default:
+		// Also check for struct/slice even when marked as incompatible
+		if sourceFieldType.Kind == analyze.TypeKindStruct && targetFieldType.Kind == analyze.TypeKindStruct {
+			if hint == mapping.HintDive {
+				return StrategyNestedCast, "nested struct (dive)"
+			}
+			return StrategyNestedCast, "nested struct"
+		}
+		if sourceFieldType.Kind == analyze.TypeKindSlice && targetFieldType.Kind == analyze.TypeKindSlice {
+			if hint == mapping.HintDive {
+				return StrategySliceMap, "slice map (dive)"
+			}
+			return StrategySliceMap, "slice map"
+		}
 		return StrategyTransform, "incompatible"
 	}
 }

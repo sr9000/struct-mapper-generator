@@ -183,7 +183,7 @@ func validateFieldMapping(
 
 	// Validate all target paths
 	for i, target := range fm.Target {
-		targetPath, err := ParsePath(target)
+		targetPath, err := ParsePath(target.Path)
 		if err != nil {
 			result.AddError(fmt.Sprintf("%s.target[%d]", basePath, i), err.Error())
 			continue
@@ -191,6 +191,12 @@ func validateFieldMapping(
 
 		if err := validateFieldPath(targetPath, targetType, "target"); err != nil {
 			result.AddError(fmt.Sprintf("%s.target[%d]", basePath, i), err.Error())
+		}
+
+		// Validate hint if present
+		if target.Hint != HintNone && !target.Hint.IsValid() {
+			result.AddError(fmt.Sprintf("%s.target[%d]", basePath, i),
+				fmt.Sprintf("invalid hint %q (expected 'dive' or 'final')", target.Hint))
 		}
 	}
 
@@ -217,7 +223,7 @@ func validateFieldMapping(
 
 	// Validate all source paths
 	for i, source := range fm.Source {
-		sourcePath, err := ParsePath(source)
+		sourcePath, err := ParsePath(source.Path)
 		if err != nil {
 			result.AddError(fmt.Sprintf("%s.source[%d]", basePath, i), err.Error())
 			continue
@@ -225,6 +231,12 @@ func validateFieldMapping(
 
 		if err := validateFieldPath(sourcePath, sourceType, "source"); err != nil {
 			result.AddError(fmt.Sprintf("%s.source[%d]", basePath, i), err.Error())
+		}
+
+		// Validate hint if present
+		if source.Hint != HintNone && !source.Hint.IsValid() {
+			result.AddError(fmt.Sprintf("%s.source[%d]", basePath, i),
+				fmt.Sprintf("invalid hint %q (expected 'dive' or 'final')", source.Hint))
 		}
 	}
 

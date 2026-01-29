@@ -17,7 +17,7 @@ This tool is intentionally **human-supervised**: it prefers to be helpful and ex
 - [x] Plan milestones (vertical slices)
 - [x] Design proposed repo layout
 - [x] Implement static analysis (AST + go/types): build a type graph once
-- [ ] Implement matching & suggestions (best-effort engine)
+- [x] Implement matching & suggestions (best-effort engine)
 - [ ] Define YAML mapping definitions (authoritative, human-reviewed)
 - [ ] Implement resolution pipeline (YAML wins, then suggestions)
 - [ ] Implement code generation (fast casters)
@@ -172,10 +172,10 @@ Combine scores into a ranked list. Always store “why”:
 - If many plausible candidates exist, prefer to output a **suggestion block** for human review.
 
 Checklist
-- [ ] `NormalizeIdent` + tests
-- [ ] Levenshtein implementation + tests
-- [ ] Type compatibility scorer using `go/types`
-- [ ] Candidate ranking with deterministic tie-breakers
+- [x] `NormalizeIdent` + tests
+- [x] Levenshtein implementation + tests
+- [x] Type compatibility scorer using `go/types`
+- [x] Candidate ranking with deterministic tie-breakers
 
 ---
 
@@ -307,8 +307,8 @@ Start strict and expand only if required:
 
 ## Draft checklist (paste-friendly)
 
-- [ ] Implement package loading + type graph extraction (`internal/analyze`)
-- [ ] Implement normalization + Levenshtein + scoring (`internal/match`)
+- [x] Implement package loading + type graph extraction (`internal/analyze`)
+- [x] Implement normalization + Levenshtein + scoring (`internal/match`)
 - [ ] Define YAML schema + validation + transform registry (`internal/mapping`)
 - [ ] Implement mapping resolution + diagnostics + suggestion export (`internal/plan`)
 - [ ] Implement deterministic caster generator (`internal/gen`)

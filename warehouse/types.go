@@ -72,7 +72,7 @@ type Order struct {
 	BillingAddress  Address `gorm:"embedded;embeddedPrefix:billing_"  json:"billing_address"`
 
 	// Relationships
-	Customer Customer    `gorm:"foreignKey:CustomerID" json:"customer,omitempty"`
+	Customer Customer    `gorm:"foreignKey:CustomerID" json:"customer"`
 	Items    []OrderItem `gorm:"foreignKey:OrderID"    json:"items"`
 
 	PlacedAt    *time.Time `json:"placed_at,omitempty"`

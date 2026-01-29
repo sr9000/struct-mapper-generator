@@ -6,6 +6,9 @@ import (
 	"caster-generator/internal/match"
 )
 
+// unknownStr is used for unknown enum values.
+const unknownStr = "unknown"
+
 // ResolvedMappingPlan is the final output of the resolution pipeline.
 // It contains everything needed for code generation.
 type ResolvedMappingPlan struct {
@@ -84,7 +87,7 @@ func (s MappingSource) String() string {
 	case MappingSourceAutoMatched:
 		return "auto"
 	default:
-		return "unknown"
+		return unknownStr
 	}
 }
 
@@ -134,7 +137,7 @@ func (s ConversionStrategy) String() string {
 	case StrategyIgnore:
 		return "ignore"
 	default:
-		return "unknown"
+		return unknownStr
 	}
 }
 

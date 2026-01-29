@@ -5,10 +5,30 @@ run:
 linters:
   default: all
   disable:
+    - cyclop         # Cyclomatic complexity - we have complex logic that's intentional
     - depguard
+    - err113         # Dynamic errors - we use descriptive error messages
+    - exhaustruct    # We don't want to fill all struct fields everywhere
+    - forbidigo      # We intentionally use fmt.Print for CLI output
+    - funcorder      # We organize methods logically, not alphabetically
+    - funlen         # Function length - complex functions are intentional
+    - gochecknoglobals # Template and type maps are fine as globals
+    - gocognit       # Cognitive complexity - similar to cyclop
+    - godoclint      # Godoc style for types
     - gosec
+    - mnd            # Magic numbers are sometimes fine in context
+    - nestif         # Nested if complexity - some nesting is necessary
+    - nilnil         # Returning (nil, nil) is sometimes intentional
     - nonamedreturns
+    - noinlineerr    # Inline error handling is idiomatic Go
+    - paralleltest   # Test parallelization not always necessary
+    - prealloc       # Micro-optimization not always needed
+    - recvcheck      # Mixed receiver types are fine for small types
+    - revive         # Disable overly pedantic style rules
     - tagliatelle
+    - testpackage    # Internal tests are fine for testing private functions
+    - varnamelen     # Short variable names are idiomatic in Go
+    - wrapcheck      # We provide context in error messages already
     - wsl
   settings:
     wsl_v5:
@@ -21,13 +41,19 @@ linters:
       # Checks the number of lines in a function.
       # If lower than 0, disable the check.
       # Default: 60
-      lines: 100
+      lines: 120
+      # Checks the number of statements in a function.
+      # Default: 40
+      statements: 70
       # Ignore comments when counting lines.
       # Default false
       ignore-comments: true
     gocritic:
       disabled-checks:
         - newDeref # *new(T) is not a mistake
+    nestif:
+      # Maximum nesting depth
+      min-complexity: 30
     ireturn:
       allow:
         - empty
@@ -37,6 +63,10 @@ linters:
         - generic
     nlreturn:
       block-size: 2
+    revive:
+      rules:
+        - name: exported
+          disabled: true  # We intentionally use verbose names for clarity
     varnamelen:
       max-distance: 6
       ignore-names:

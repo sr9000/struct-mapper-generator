@@ -160,9 +160,9 @@ func (f FieldRefArray) HasConflictingHints() bool {
 // For 1:N mappings, uses the source (first type) hint.
 // For N:1 mappings, uses the target (last type) hint.
 // Returns HintNone if no hints or conflicting hints.
-func (sources FieldRefArray) GetEffectiveHint(targets FieldRefArray) IntrospectionHint {
+func (f FieldRefArray) GetEffectiveHint(targets FieldRefArray) IntrospectionHint {
 	// Check for conflicting hints across both arrays
-	allRefs := append(append([]FieldRef{}, sources...), targets...)
+	allRefs := append(append([]FieldRef{}, f...), targets...)
 	hasDive := false
 	hasFinal := false
 
@@ -181,13 +181,13 @@ func (sources FieldRefArray) GetEffectiveHint(targets FieldRefArray) Introspecti
 		return HintFinal
 	}
 
-	srcCount := len(sources)
+	srcCount := len(f)
 	tgtCount := len(targets)
 
 	// 1:N - introspect source (first type)
 	if srcCount <= 1 && tgtCount > 1 {
-		if srcCount == 1 && sources[0].Hint != HintNone {
-			return sources[0].Hint
+		if srcCount == 1 && f[0].Hint != HintNone {
+			return f[0].Hint
 		}
 		// Check targets for hints
 		for _, t := range targets {
@@ -205,7 +205,7 @@ func (sources FieldRefArray) GetEffectiveHint(targets FieldRefArray) Introspecti
 			return targets[0].Hint
 		}
 		// Check sources for hints
-		for _, s := range sources {
+		for _, s := range f {
 			if s.Hint != HintNone {
 				return s.Hint
 			}
@@ -216,8 +216,8 @@ func (sources FieldRefArray) GetEffectiveHint(targets FieldRefArray) Introspecti
 
 	// 1:1 - any hint applies
 	if srcCount <= 1 && tgtCount <= 1 {
-		if srcCount == 1 && sources[0].Hint != HintNone {
-			return sources[0].Hint
+		if srcCount == 1 && f[0].Hint != HintNone {
+			return f[0].Hint
 		}
 
 		if tgtCount == 1 && targets[0].Hint != HintNone {

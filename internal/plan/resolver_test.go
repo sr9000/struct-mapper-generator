@@ -752,12 +752,10 @@ func TestResolverSliceOfStructs(t *testing.T) {
 	// Verify it was recursively resolved
 	if nestedConv.ResolvedPair == nil {
 		t.Error("Expected nested pair to be recursively resolved")
-	} else {
+	} else if len(nestedConv.ResolvedPair.UnmappedTargets) != 1 {
 		// ID and Name should be auto-matched, Cost should be unmapped
-		if len(nestedConv.ResolvedPair.UnmappedTargets) != 1 {
-			t.Errorf("Expected 1 unmapped target (Cost), got %d",
-				len(nestedConv.ResolvedPair.UnmappedTargets))
-		}
+		t.Errorf("Expected 1 unmapped target (Cost), got %d",
+			len(nestedConv.ResolvedPair.UnmappedTargets))
 	}
 }
 

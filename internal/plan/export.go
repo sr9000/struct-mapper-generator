@@ -207,7 +207,7 @@ func GenerateReport(plan *ResolvedMappingPlan) *SuggestionReport {
 
 		for _, m := range tp.Mappings {
 			switch m.Source {
-			case MappingSourceYAML121, MappingSourceYAMLFields:
+			case MappingSourceYAML121, MappingSourceYAMLFields, MappingSourceYAMLAuto:
 				tpr.ExplicitCount++
 			case MappingSourceYAMLIgnore:
 				tpr.IgnoredCount++

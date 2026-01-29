@@ -10,6 +10,12 @@ import (
 	"caster-generator/internal/match"
 )
 
+// Strategy explanation constants.
+const (
+	explSliceMap     = "slice map"
+	explNestedStruct = "nested struct"
+)
+
 // ResolutionConfig holds configuration for the resolution process.
 type ResolutionConfig struct {
 	// MinConfidence is the minimum score for auto-accepting a match.
@@ -359,10 +365,11 @@ func (r *Resolver) resolveFieldMapping(
 		explanation string
 	)
 
-	if fm.Transform != "" {
+	switch {
+	case fm.Transform != "":
 		strategy = StrategyTransform
 		explanation = "transform: " + fm.Transform
-	} else if len(sourcePaths) == 1 && len(targetPaths) == 1 {
+	case len(sourcePaths) == 1 && len(targetPaths) == 1:
 		var compat string
 
 		strategy, compat = r.determineStrategyWithHint(sourcePaths[0], targetPaths[0], sourceType, targetType, effectiveHint)
@@ -371,7 +378,7 @@ func (r *Resolver) resolveFieldMapping(
 		if effectiveHint != mapping.HintNone {
 			explanation += fmt.Sprintf(" [hint: %s]", effectiveHint)
 		}
-	} else {
+	default:
 		strategy = StrategyTransform
 
 		explanation = fmt.Sprintf("multi-field mapping: %s", cardinality)
@@ -443,19 +450,19 @@ func (r *Resolver) determineStrategyWithHint(
 		if sourceFieldType.Kind == analyze.TypeKindSlice && targetFieldType.Kind == analyze.TypeKindSlice {
 			// For slices, check if hint says dive (introspect elements) or final
 			if hint == mapping.HintDive {
-				return StrategySliceMap, "slice map (dive)"
+				return StrategySliceMap, explSliceMap + " (dive)"
 			}
 
-			return StrategySliceMap, "slice map"
+			return StrategySliceMap, explSliceMap
 		}
 
 		if sourceFieldType.Kind == analyze.TypeKindStruct && targetFieldType.Kind == analyze.TypeKindStruct {
 			// For structs, check if hint says dive (recursively map fields) or final
 			if hint == mapping.HintDive {
-				return StrategyNestedCast, "nested struct (dive)"
+				return StrategyNestedCast, explNestedStruct + " (dive)"
 			}
 			// Default behavior: introspect structs unless marked final
-			return StrategyNestedCast, "nested struct"
+			return StrategyNestedCast, explNestedStruct
 		}
 
 		return StrategyTransform, "needs transform"
@@ -463,18 +470,18 @@ func (r *Resolver) determineStrategyWithHint(
 		// Also check for struct/slice even when marked as incompatible
 		if sourceFieldType.Kind == analyze.TypeKindStruct && targetFieldType.Kind == analyze.TypeKindStruct {
 			if hint == mapping.HintDive {
-				return StrategyNestedCast, "nested struct (dive)"
+				return StrategyNestedCast, explNestedStruct + " (dive)"
 			}
 
-			return StrategyNestedCast, "nested struct"
+			return StrategyNestedCast, explNestedStruct
 		}
 
 		if sourceFieldType.Kind == analyze.TypeKindSlice && targetFieldType.Kind == analyze.TypeKindSlice {
 			if hint == mapping.HintDive {
-				return StrategySliceMap, "slice map (dive)"
+				return StrategySliceMap, explSliceMap + " (dive)"
 			}
 
-			return StrategySliceMap, "slice map"
+			return StrategySliceMap, explSliceMap
 		}
 
 		return StrategyTransform, "incompatible"
@@ -591,16 +598,20 @@ func (r *Resolver) autoMatchRemainingFields(
 				Segments: []mapping.PathSegment{{Name: targetField.Name}},
 			}
 
-			reason := "no high-confidence match"
-			if candidates.IsAmbiguous(r.config.AmbiguityThreshold) && len(candidates) >= 2 {
+			var reason string
+
+			switch {
+			case candidates.IsAmbiguous(r.config.AmbiguityThreshold) && len(candidates) >= 2:
 				reason = fmt.Sprintf("ambiguous: top candidates %q (%.2f) and %q (%.2f) are too close",
 					candidates[0].SourceField.Name, candidates[0].CombinedScore,
 					candidates[1].SourceField.Name, candidates[1].CombinedScore)
-			} else if len(candidates) > 0 && candidates[0].CombinedScore < r.config.MinConfidence {
+			case len(candidates) > 0 && candidates[0].CombinedScore < r.config.MinConfidence:
 				reason = fmt.Sprintf("best match %q (%.2f) below threshold %.2f",
 					candidates[0].SourceField.Name, candidates[0].CombinedScore, r.config.MinConfidence)
-			} else if len(candidates) == 0 {
+			case len(candidates) == 0:
 				reason = "no compatible source fields found"
+			default:
+				reason = "no high-confidence match"
 			}
 
 			result.UnmappedTargets = append(result.UnmappedTargets, UnmappedField{
@@ -752,7 +763,11 @@ func (r *Resolver) detectNestedConversions(result *ResolvedTypePair, diags *Diag
 		}
 
 		// Recursively resolve if enabled
-		if r.config.RecursiveResolve && nc.SourceType.Kind == analyze.TypeKindStruct && nc.TargetType.Kind == analyze.TypeKindStruct {
+		isRecursiveResolve := r.config.RecursiveResolve
+
+		isStructPair := nc.SourceType.Kind == analyze.TypeKindStruct &&
+			nc.TargetType.Kind == analyze.TypeKindStruct
+		if isRecursiveResolve && isStructPair {
 			nestedResult, err := r.resolveTypePairRecursive(nc.SourceType, nc.TargetType, diags, depth+1)
 			if err != nil {
 				diags.AddWarning("nested_resolve_error", err.Error(), key, "")

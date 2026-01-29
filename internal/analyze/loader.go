@@ -57,10 +57,7 @@ func (a *Analyzer) LoadPackages(patterns ...string) (*TypeGraph, error) {
 
 	// Process each package
 	for _, pkg := range pkgs {
-		err := a.processPackage(pkg)
-		if err != nil {
-			return nil, fmt.Errorf("failed to process package %s: %w", pkg.PkgPath, err)
-		}
+		a.processPackage(pkg)
 	}
 
 	return a.graph, nil
@@ -72,7 +69,7 @@ func (a *Analyzer) Graph() *TypeGraph {
 }
 
 // processPackage extracts types from a loaded package.
-func (a *Analyzer) processPackage(pkg *packages.Package) error {
+func (a *Analyzer) processPackage(pkg *packages.Package) {
 	pkgInfo := &PackageInfo{
 		Path: pkg.PkgPath,
 		Name: pkg.Name,
@@ -107,8 +104,6 @@ func (a *Analyzer) processPackage(pkg *packages.Package) error {
 	}
 
 	a.graph.Packages[pkg.PkgPath] = pkgInfo
-
-	return nil
 }
 
 // analyzeType recursively analyzes a go/types.Type and returns a TypeInfo.
@@ -193,7 +188,8 @@ func (a *Analyzer) isExternalPackage(pkgPath string) bool {
 
 // analyzeStructFields extracts fields from a struct type.
 func (a *Analyzer) analyzeStructFields(st *types.Struct, info *TypeInfo) {
-	for i := 0; i < st.NumFields(); i++ {
+	numFields := st.NumFields()
+	for i := range numFields {
 		field := st.Field(i)
 
 		// Only process exported fields (per PLAN.md 80/20 rule)

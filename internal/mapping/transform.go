@@ -7,6 +7,9 @@ import (
 	"caster-generator/internal/analyze"
 )
 
+// interfaceTypeStr is the default type string for unknown types.
+const interfaceTypeStr = "interface{}"
+
 // TransformRegistry holds validated transform definitions and provides lookup.
 type TransformRegistry struct {
 	transforms map[string]*ValidatedTransform
@@ -191,12 +194,12 @@ func extractFieldName(path string) string {
 func GenerateStub(def *TransformDef) string {
 	sourceType := def.SourceType
 	if sourceType == "" {
-		sourceType = "interface{}"
+		sourceType = interfaceTypeStr
 	}
 
 	targetType := def.TargetType
 	if targetType == "" {
-		targetType = "interface{}"
+		targetType = interfaceTypeStr
 	}
 
 	comment := "// " + def.Func + " transforms a value from source to target type."
@@ -215,7 +218,7 @@ func %s(src %s) %s {
 func GenerateMultiSourceStub(def *TransformDef, sourceFields []string) string {
 	targetType := def.TargetType
 	if targetType == "" {
-		targetType = "interface{}"
+		targetType = interfaceTypeStr
 	}
 
 	// Build parameter list
@@ -223,7 +226,7 @@ func GenerateMultiSourceStub(def *TransformDef, sourceFields []string) string {
 
 	for _, field := range sourceFields {
 		paramName := strings.ToLower(extractFieldName(field)[:1]) + extractFieldName(field)[1:]
-		params = append(params, paramName+" interface{}")
+		params = append(params, paramName+" "+interfaceTypeStr)
 	}
 
 	comment := "// " + def.Func + " combines multiple source fields into a single target value."

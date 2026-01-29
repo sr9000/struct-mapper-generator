@@ -14,6 +14,9 @@ import (
 	"caster-generator/internal/plan"
 )
 
+// interfaceTypeStr is used as a fallback type string.
+const interfaceTypeStr = "interface{}"
+
 // GeneratorConfig holds configuration for code generation.
 type GeneratorConfig struct {
 	// PackageName is the name of the generated package.
@@ -620,7 +623,7 @@ func (g *Generator) getFieldTypeString(
 ) string {
 	ft := g.getFieldTypeInfo(typeInfo, fieldPath)
 	if ft == nil {
-		return "interface{}"
+		return interfaceTypeStr
 	}
 
 	return g.typeRefString(ft, imports)
@@ -628,7 +631,7 @@ func (g *Generator) getFieldTypeString(
 
 func (g *Generator) typeRefString(t *analyze.TypeInfo, imports map[string]importSpec) string {
 	if t == nil {
-		return "interface{}"
+		return interfaceTypeStr
 	}
 
 	switch t.Kind {
@@ -640,14 +643,14 @@ func (g *Generator) typeRefString(t *analyze.TypeInfo, imports map[string]import
 			return "*" + g.typeRefString(t.ElemType, imports)
 		}
 
-		return "*interface{}"
+		return "*" + interfaceTypeStr
 
 	case analyze.TypeKindSlice:
 		if t.ElemType != nil {
 			return "[]" + g.typeRefString(t.ElemType, imports)
 		}
 
-		return "[]interface{}"
+		return "[]" + interfaceTypeStr
 
 	case analyze.TypeKindStruct, analyze.TypeKindExternal, analyze.TypeKindAlias:
 		if t.ID.PkgPath != "" {

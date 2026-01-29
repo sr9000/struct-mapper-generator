@@ -85,11 +85,6 @@ func TestCandidateList_Sorting(t *testing.T) {
 	// This should be done by RankCandidates, but test manual sorting
 	// (candidates are already sorted when returned from RankCandidates)
 
-	// Verify ordering after explicit sort
-	if candidates[0].CombinedScore > candidates[1].CombinedScore {
-		// Pre-sorted highest first
-	}
-
 	// Test that Best() returns highest
 	best := candidates.Best()
 	if best == nil {

@@ -146,7 +146,12 @@ func (s *TypeStringer) BuildFieldPaths(root *TypeInfo, maxDepth int) map[string]
 	return result
 }
 
-func (s *TypeStringer) buildFieldPathsRecursive(t *TypeInfo, path *TypePath, result map[string]*FieldInfo, depth, maxDepth int) {
+func (s *TypeStringer) buildFieldPathsRecursive(
+	t *TypeInfo,
+	path *TypePath,
+	result map[string]*FieldInfo,
+	depth, maxDepth int,
+) {
 	if depth > maxDepth || t == nil {
 		return
 	}
@@ -164,7 +169,12 @@ func (s *TypeStringer) buildFieldPathsRecursive(t *TypeInfo, path *TypePath, res
 	}
 }
 
-func (s *TypeStringer) processNestedType(t *TypeInfo, path *TypePath, result map[string]*FieldInfo, depth, maxDepth int) {
+func (s *TypeStringer) processNestedType(
+	t *TypeInfo,
+	path *TypePath,
+	result map[string]*FieldInfo,
+	depth, maxDepth int,
+) {
 	if t == nil || depth > maxDepth {
 		return
 	}

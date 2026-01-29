@@ -11,6 +11,21 @@ This tool is intentionally **human-supervised**: it prefers to be helpful and ex
 
 ---
 
+## Checklist
+
+- [ ] Define success criteria (contract)
+- [ ] Plan milestones (vertical slices)
+- [ ] Design proposed repo layout
+- [ ] Implement static analysis (AST + go/types): build a type graph once
+- [ ] Implement matching & suggestions (best-effort engine)
+- [ ] Define YAML mapping definitions (authoritative, human-reviewed)
+- [ ] Implement resolution pipeline (YAML wins, then suggestions)
+- [ ] Implement code generation (fast casters)
+- [ ] Design CLI workflows (semi-automated)
+- [ ] Define 80/20 boundaries (explicit non-goals for v1)
+
+---
+
 ## 0) Success criteria (contract)
 
 **Inputs**

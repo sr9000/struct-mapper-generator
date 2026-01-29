@@ -19,7 +19,7 @@ This tool is intentionally **human-supervised**: it prefers to be helpful and ex
 - [x] Implement static analysis (AST + go/types): build a type graph once
 - [x] Implement matching & suggestions (best-effort engine)
 - [x] Define YAML mapping definitions (authoritative, human-reviewed)
-- [ ] Implement resolution pipeline (YAML wins, then suggestions)
+- [x] Implement resolution pipeline (YAML wins, then suggestions)
 - [ ] Implement code generation (fast casters)
 - [ ] Design CLI workflows (semi-automated)
 - [ ] Define 80/20 boundaries (explicit non-goals for v1)
@@ -251,9 +251,9 @@ Optional artifact:
 - Write `mapping.suggested.yaml` so humans can edit/approve and then promote to authoritative YAML.
 
 Checklist
-- [ ] Implement `ResolvedMappingPlan` model
-- [ ] Confidence thresholds + deterministic ordering
-- [ ] Suggestion export format
+- [x] Implement `ResolvedMappingPlan` model
+- [x] Confidence thresholds + deterministic ordering
+- [x] Suggestion export format
 
 ---
 
@@ -325,7 +325,7 @@ Start strict and expand only if required:
 - [x] Implement package loading + type graph extraction (`internal/analyze`)
 - [x] Implement normalization + Levenshtein + scoring (`internal/match`)
 - [x] Define YAML schema + validation + transform registry (`internal/mapping`)
-- [ ] Implement mapping resolution + diagnostics + suggestion export (`internal/plan`)
+- [x] Implement mapping resolution + diagnostics + suggestion export (`internal/plan`)
 - [ ] Implement deterministic caster generator (`internal/gen`)
 - [ ] Add CLI commands: analyze/suggest/gen/check (`cmd/caster-generator`)
 - [ ] Document workflow: suggest → review YAML → gen → commit

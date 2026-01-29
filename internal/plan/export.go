@@ -1,0 +1,270 @@
+package plan
+
+import (
+	"fmt"
+
+	"caster-generator/internal/mapping"
+
+	"gopkg.in/yaml.v3"
+)
+
+// ExportSuggestions generates a suggested YAML mapping file from a resolved plan.
+// This allows users to review and approve auto-matched mappings.
+func ExportSuggestions(plan *ResolvedMappingPlan) (*mapping.MappingFile, error) {
+	mf := &mapping.MappingFile{
+		Version:      "1",
+		TypeMappings: []mapping.TypeMapping{},
+		Transforms:   []mapping.TransformDef{},
+	}
+
+	for _, tp := range plan.TypePairs {
+		tm := exportTypePairSuggestions(&tp)
+		mf.TypeMappings = append(mf.TypeMappings, tm)
+	}
+
+	return mf, nil
+}
+
+// ExportSuggestionsYAML generates suggested YAML as a byte slice.
+func ExportSuggestionsYAML(plan *ResolvedMappingPlan) ([]byte, error) {
+	mf, err := ExportSuggestions(plan)
+	if err != nil {
+		return nil, err
+	}
+
+	return yaml.Marshal(mf)
+}
+
+// exportTypePairSuggestions exports a single type pair as a TypeMapping.
+func exportTypePairSuggestions(tp *ResolvedTypePair) mapping.TypeMapping {
+	tm := mapping.TypeMapping{
+		Source:   tp.SourceType.ID.String(),
+		Target:   tp.TargetType.ID.String(),
+		OneToOne: make(map[string]string),
+		Fields:   []mapping.FieldMapping{},
+		Ignore:   []string{},
+		Auto:     []mapping.FieldMapping{},
+	}
+
+	for _, m := range tp.Mappings {
+		switch m.Source {
+		case MappingSourceYAML121:
+			// Preserve as 121 mappings
+			if len(m.SourcePaths) == 1 && len(m.TargetPaths) == 1 {
+				tm.OneToOne[m.SourcePaths[0].String()] = m.TargetPaths[0].String()
+			}
+
+		case MappingSourceYAMLFields:
+			// Preserve explicit fields
+			fm := exportFieldMapping(&m)
+			tm.Fields = append(tm.Fields, fm)
+
+		case MappingSourceYAMLIgnore, MappingSourceYAMLAuto:
+			// Keep these as-is
+			if m.Strategy == StrategyIgnore {
+				for _, tp := range m.TargetPaths {
+					tm.Ignore = append(tm.Ignore, tp.String())
+				}
+			} else {
+				fm := exportFieldMapping(&m)
+				tm.Auto = append(tm.Auto, fm)
+			}
+
+		case MappingSourceAutoMatched:
+			// Put auto-matched into the auto section with comments
+			fm := exportFieldMapping(&m)
+			// Add comment with confidence info
+			fm.Transform = "" // Clear any generated transform name
+			tm.Auto = append(tm.Auto, fm)
+		}
+	}
+
+	// Add unmapped fields as comments/suggestions
+	for _, um := range tp.UnmappedTargets {
+		// Create a placeholder entry for user to review
+		fm := mapping.FieldMapping{
+			Target: mapping.StringOrArray{um.TargetPath.String()},
+			Ignore: true, // Default to ignore, user can change
+		}
+		tm.Auto = append(tm.Auto, fm)
+	}
+
+	return tm
+}
+
+// exportFieldMapping converts a ResolvedFieldMapping to a mapping.FieldMapping.
+func exportFieldMapping(m *ResolvedFieldMapping) mapping.FieldMapping {
+	fm := mapping.FieldMapping{}
+
+	// Set targets
+	targets := make([]string, len(m.TargetPaths))
+	for i, tp := range m.TargetPaths {
+		targets[i] = tp.String()
+	}
+	fm.Target = targets
+
+	// Set sources
+	if len(m.SourcePaths) > 0 {
+		sources := make([]string, len(m.SourcePaths))
+		for i, sp := range m.SourcePaths {
+			sources[i] = sp.String()
+		}
+		fm.Source = sources
+	}
+
+	// Set default
+	if m.Default != nil {
+		fm.Default = m.Default
+	}
+
+	// Set transform
+	if m.Transform != "" {
+		fm.Transform = m.Transform
+	}
+
+	// Set ignore
+	if m.Strategy == StrategyIgnore {
+		fm.Ignore = true
+	}
+
+	return fm
+}
+
+// SuggestionReport generates a human-readable report of suggestions.
+type SuggestionReport struct {
+	TypePairs []TypePairReport
+}
+
+// TypePairReport contains suggestions for a single type pair.
+type TypePairReport struct {
+	Source        string
+	Target        string
+	AutoMatched   []MatchReport
+	Unmapped      []UnmappedReport
+	ExplicitCount int
+	IgnoredCount  int
+	NeedsReview   bool
+}
+
+// MatchReport describes an auto-matched field.
+type MatchReport struct {
+	SourceField string
+	TargetField string
+	Confidence  float64
+	Strategy    string
+	Explanation string
+}
+
+// UnmappedReport describes an unmapped field with suggestions.
+type UnmappedReport struct {
+	TargetField string
+	Reason      string
+	Candidates  []CandidateReport
+}
+
+// CandidateReport describes a potential match candidate.
+type CandidateReport struct {
+	SourceField string
+	Score       float64
+	TypeCompat  string
+}
+
+// GenerateReport creates a suggestion report from a resolved plan.
+func GenerateReport(plan *ResolvedMappingPlan) *SuggestionReport {
+	report := &SuggestionReport{
+		TypePairs: []TypePairReport{},
+	}
+
+	for _, tp := range plan.TypePairs {
+		tpr := TypePairReport{
+			Source:      tp.SourceType.ID.String(),
+			Target:      tp.TargetType.ID.String(),
+			AutoMatched: []MatchReport{},
+			Unmapped:    []UnmappedReport{},
+		}
+
+		for _, m := range tp.Mappings {
+			switch m.Source {
+			case MappingSourceYAML121, MappingSourceYAMLFields:
+				tpr.ExplicitCount++
+			case MappingSourceYAMLIgnore:
+				tpr.IgnoredCount++
+			case MappingSourceAutoMatched:
+				if len(m.SourcePaths) > 0 && len(m.TargetPaths) > 0 {
+					tpr.AutoMatched = append(tpr.AutoMatched, MatchReport{
+						SourceField: m.SourcePaths[0].String(),
+						TargetField: m.TargetPaths[0].String(),
+						Confidence:  m.Confidence,
+						Strategy:    m.Strategy.String(),
+						Explanation: m.Explanation,
+					})
+				}
+			}
+		}
+
+		for _, um := range tp.UnmappedTargets {
+			umr := UnmappedReport{
+				TargetField: um.TargetPath.String(),
+				Reason:      um.Reason,
+				Candidates:  []CandidateReport{},
+			}
+
+			for _, c := range um.Candidates {
+				umr.Candidates = append(umr.Candidates, CandidateReport{
+					SourceField: c.SourceField.Name,
+					Score:       c.CombinedScore,
+					TypeCompat:  c.TypeCompat.Compatibility.String(),
+				})
+			}
+
+			tpr.Unmapped = append(tpr.Unmapped, umr)
+		}
+
+		tpr.NeedsReview = len(tpr.Unmapped) > 0
+
+		report.TypePairs = append(report.TypePairs, tpr)
+	}
+
+	return report
+}
+
+// FormatReport formats a suggestion report as human-readable text.
+func FormatReport(report *SuggestionReport) string {
+	var result string
+
+	for _, tp := range report.TypePairs {
+		result += fmt.Sprintf("\n=== %s -> %s ===\n", tp.Source, tp.Target)
+		result += fmt.Sprintf("Explicit: %d, Ignored: %d, Auto-matched: %d, Unmapped: %d\n",
+			tp.ExplicitCount, tp.IgnoredCount, len(tp.AutoMatched), len(tp.Unmapped))
+
+		if len(tp.AutoMatched) > 0 {
+			result += "\nAuto-matched fields:\n"
+			for _, m := range tp.AutoMatched {
+				result += fmt.Sprintf("  ✓ %s -> %s (%.0f%%, %s)\n",
+					m.SourceField, m.TargetField, m.Confidence*100, m.Strategy)
+			}
+		}
+
+		if len(tp.Unmapped) > 0 {
+			result += "\nUnmapped target fields (need review):\n"
+			for _, um := range tp.Unmapped {
+				result += fmt.Sprintf("  ✗ %s: %s\n", um.TargetField, um.Reason)
+				if len(um.Candidates) > 0 {
+					result += "    Suggestions:\n"
+					for i, c := range um.Candidates {
+						result += fmt.Sprintf("      %d. %s (%.0f%%, %s)\n",
+							i+1, c.SourceField, c.Score*100, c.TypeCompat)
+					}
+				}
+			}
+		}
+
+		if tp.NeedsReview {
+			result += "\n⚠ This type pair needs manual review.\n"
+		} else {
+			result += "\n✓ All target fields mapped.\n"
+		}
+	}
+
+	return result
+}

@@ -58,7 +58,7 @@ func tokenizeCamelCase(s string) []string {
 	var current strings.Builder
 
 	runes := []rune(s)
-	for i := 0; i < len(runes); i++ {
+	for i := range runes {
 		r := runes[i]
 
 		// Handle separators - start a new token

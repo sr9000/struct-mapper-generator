@@ -1,6 +1,7 @@
 package plan
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 
@@ -80,7 +81,7 @@ func (r *Resolver) Resolve() (*ResolvedMappingPlan, error) {
 	}
 
 	if r.mappingDef == nil {
-		return nil, fmt.Errorf("mapping definition is required")
+		return nil, errors.New("mapping definition is required")
 	}
 
 	// Process each type mapping
@@ -89,14 +90,16 @@ func (r *Resolver) Resolve() (*ResolvedMappingPlan, error) {
 		if err != nil {
 			plan.Diagnostics.AddError("resolve_failed", err.Error(),
 				fmt.Sprintf("%s->%s", tm.Source, tm.Target), "")
+
 			continue
 		}
+
 		plan.TypePairs = append(plan.TypePairs, *resolved)
 	}
 
 	// In strict mode, fail if there are unresolved targets
 	if r.config.StrictMode && plan.Diagnostics.HasErrors() {
-		return plan, fmt.Errorf("strict mode: resolution failed with errors")
+		return plan, errors.New("strict mode: resolution failed with errors")
 	}
 
 	return plan, nil
@@ -110,7 +113,7 @@ func (r *Resolver) resolveTypePairRecursive(
 	depth int,
 ) (*ResolvedTypePair, error) {
 	if sourceType == nil || targetType == nil {
-		return nil, fmt.Errorf("source or target type is nil")
+		return nil, errors.New("source or target type is nil")
 	}
 
 	typePairKey := fmt.Sprintf("%s->%s", sourceType.ID, targetType.ID)
@@ -181,6 +184,7 @@ func (r *Resolver) resolveTypeMapping(
 			diags.AddWarning("121_mapping_error", err.Error(), typePairStr, targetPath)
 			continue
 		}
+
 		result.Mappings = append(result.Mappings, *resolved)
 		// Mark all target paths as mapped
 		for _, tp := range resolved.TargetPaths {
@@ -201,10 +205,13 @@ func (r *Resolver) resolveTypeMapping(
 				diags.AddWarning("mapping_override",
 					fmt.Sprintf("field %q already mapped by higher priority rule", tp.String()),
 					typePairStr, tp.String())
+
 				continue
 			}
+
 			mappedTargets[tp.String()] = true
 		}
+
 		result.Mappings = append(result.Mappings, *resolved)
 	}
 
@@ -213,11 +220,13 @@ func (r *Resolver) resolveTypeMapping(
 		if mappedTargets[ignorePath] {
 			continue // Already handled by higher priority
 		}
+
 		fp, err := mapping.ParsePath(ignorePath)
 		if err != nil {
 			diags.AddWarning("ignore_parse_error", err.Error(), typePairStr, ignorePath)
 			continue
 		}
+
 		resolved := ResolvedFieldMapping{
 			TargetPaths: []mapping.FieldPath{fp},
 			SourcePaths: nil,
@@ -241,8 +250,10 @@ func (r *Resolver) resolveTypeMapping(
 			if mappedTargets[tp.String()] {
 				continue // Already handled by higher priority
 			}
+
 			mappedTargets[tp.String()] = true
 		}
+
 		result.Mappings = append(result.Mappings, *resolved)
 	}
 
@@ -295,11 +306,13 @@ func (r *Resolver) resolveFieldMapping(
 ) (*ResolvedFieldMapping, error) {
 	// Parse target paths
 	var targetPaths []mapping.FieldPath
+
 	for _, t := range fm.Target {
 		tp, err := mapping.ParsePath(t.Path)
 		if err != nil {
 			return nil, fmt.Errorf("invalid target path %q: %w", t.Path, err)
 		}
+
 		targetPaths = append(targetPaths, tp)
 	}
 
@@ -321,17 +334,19 @@ func (r *Resolver) resolveFieldMapping(
 			Strategy:    StrategyDefault,
 			Default:     fm.Default,
 			Cardinality: mapping.CardinalityOneToOne,
-			Explanation: fmt.Sprintf("default value: %s", *fm.Default),
+			Explanation: "default value: " + *fm.Default,
 		}, nil
 	}
 
 	// Parse source paths
 	var sourcePaths []mapping.FieldPath
+
 	for _, s := range fm.Source {
 		sp, err := mapping.ParsePath(s.Path)
 		if err != nil {
 			return nil, fmt.Errorf("invalid source path %q: %w", s.Path, err)
 		}
+
 		sourcePaths = append(sourcePaths, sp)
 	}
 
@@ -339,21 +354,26 @@ func (r *Resolver) resolveFieldMapping(
 	effectiveHint := fm.GetEffectiveHint()
 
 	// Determine strategy
-	var strategy ConversionStrategy
-	var explanation string
+	var (
+		strategy    ConversionStrategy
+		explanation string
+	)
 
 	if fm.Transform != "" {
 		strategy = StrategyTransform
-		explanation = fmt.Sprintf("transform: %s", fm.Transform)
+		explanation = "transform: " + fm.Transform
 	} else if len(sourcePaths) == 1 && len(targetPaths) == 1 {
 		var compat string
+
 		strategy, compat = r.determineStrategyWithHint(sourcePaths[0], targetPaths[0], sourceType, targetType, effectiveHint)
+
 		explanation = fmt.Sprintf("field mapping: %s (%s)", cardinality, compat)
 		if effectiveHint != mapping.HintNone {
 			explanation += fmt.Sprintf(" [hint: %s]", effectiveHint)
 		}
 	} else {
 		strategy = StrategyTransform
+
 		explanation = fmt.Sprintf("multi-field mapping: %s", cardinality)
 		if effectiveHint != mapping.HintNone {
 			explanation += fmt.Sprintf(" [hint: %s]", effectiveHint)
@@ -415,16 +435,20 @@ func (r *Resolver) determineStrategyWithHint(
 		if sourceFieldType.Kind == analyze.TypeKindPointer && targetFieldType.Kind != analyze.TypeKindPointer {
 			return StrategyPointerDeref, "pointer deref"
 		}
+
 		if sourceFieldType.Kind != analyze.TypeKindPointer && targetFieldType.Kind == analyze.TypeKindPointer {
 			return StrategyPointerWrap, "pointer wrap"
 		}
+
 		if sourceFieldType.Kind == analyze.TypeKindSlice && targetFieldType.Kind == analyze.TypeKindSlice {
 			// For slices, check if hint says dive (introspect elements) or final
 			if hint == mapping.HintDive {
 				return StrategySliceMap, "slice map (dive)"
 			}
+
 			return StrategySliceMap, "slice map"
 		}
+
 		if sourceFieldType.Kind == analyze.TypeKindStruct && targetFieldType.Kind == analyze.TypeKindStruct {
 			// For structs, check if hint says dive (recursively map fields) or final
 			if hint == mapping.HintDive {
@@ -433,6 +457,7 @@ func (r *Resolver) determineStrategyWithHint(
 			// Default behavior: introspect structs unless marked final
 			return StrategyNestedCast, "nested struct"
 		}
+
 		return StrategyTransform, "needs transform"
 	default:
 		// Also check for struct/slice even when marked as incompatible
@@ -440,14 +465,18 @@ func (r *Resolver) determineStrategyWithHint(
 			if hint == mapping.HintDive {
 				return StrategyNestedCast, "nested struct (dive)"
 			}
+
 			return StrategyNestedCast, "nested struct"
 		}
+
 		if sourceFieldType.Kind == analyze.TypeKindSlice && targetFieldType.Kind == analyze.TypeKindSlice {
 			if hint == mapping.HintDive {
 				return StrategySliceMap, "slice map (dive)"
 			}
+
 			return StrategySliceMap, "slice map"
 		}
+
 		return StrategyTransform, "incompatible"
 	}
 }
@@ -462,6 +491,7 @@ func (r *Resolver) resolveFieldType(path mapping.FieldPath, typeInfo *analyze.Ty
 		}
 
 		var found *analyze.FieldInfo
+
 		for i := range current.Fields {
 			if current.Fields[i].Name == seg.Name {
 				found = &current.Fields[i]
@@ -664,6 +694,7 @@ func (r *Resolver) detectNestedConversions(result *ResolvedTypePair, diags *Diag
 						if sourceFieldType.Kind == analyze.TypeKindSlice && sourceFieldType.ElemType != nil {
 							actualSourceType = sourceFieldType.ElemType
 						}
+
 						if targetFieldType.Kind == analyze.TypeKindSlice && targetFieldType.ElemType != nil {
 							actualTargetType = targetFieldType.ElemType
 						}
@@ -673,6 +704,7 @@ func (r *Resolver) detectNestedConversions(result *ResolvedTypePair, diags *Diag
 					if actualSourceType.Kind == analyze.TypeKindPointer && actualSourceType.ElemType != nil {
 						actualSourceType = actualSourceType.ElemType
 					}
+
 					if actualTargetType.Kind == analyze.TypeKindPointer && actualTargetType.ElemType != nil {
 						actualTargetType = actualTargetType.ElemType
 					}
@@ -711,8 +743,9 @@ func (r *Resolver) detectNestedConversions(result *ResolvedTypePair, diags *Diag
 		// Check recursion depth
 		if r.config.MaxRecursionDepth > 0 && depth >= r.config.MaxRecursionDepth {
 			diags.AddWarning("max_recursion_depth",
-				fmt.Sprintf("max recursion depth reached for %s", key),
+				"max recursion depth reached for "+key,
 				key, "")
+
 			result.NestedPairs = append(result.NestedPairs, *nc)
 
 			continue
@@ -745,6 +778,7 @@ func (r *Resolver) sortMappings(result *ResolvedTypePair) {
 		if len(result.Mappings[i].TargetPaths) > 0 && len(result.Mappings[j].TargetPaths) > 0 {
 			return result.Mappings[i].TargetPaths[0].String() < result.Mappings[j].TargetPaths[0].String()
 		}
+
 		return false
 	})
 
@@ -757,6 +791,7 @@ func (r *Resolver) sortMappings(result *ResolvedTypePair) {
 	sort.Slice(result.NestedPairs, func(i, j int) bool {
 		iKey := fmt.Sprintf("%s->%s", result.NestedPairs[i].SourceType.ID, result.NestedPairs[i].TargetType.ID)
 		jKey := fmt.Sprintf("%s->%s", result.NestedPairs[j].SourceType.ID, result.NestedPairs[j].TargetType.ID)
+
 		return iKey < jKey
 	})
 }

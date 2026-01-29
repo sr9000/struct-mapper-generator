@@ -220,6 +220,7 @@ func GenerateMultiSourceStub(def *TransformDef, sourceFields []string) string {
 
 	// Build parameter list
 	var params []string
+
 	for _, field := range sourceFields {
 		paramName := strings.ToLower(extractFieldName(field)[:1]) + extractFieldName(field)[1:]
 		params = append(params, paramName+" interface{}")

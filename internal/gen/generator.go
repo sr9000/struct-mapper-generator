@@ -487,7 +487,7 @@ func (g *Generator) buildElementConversion(
 	tgtElemStr string,
 ) string {
 	if g.typesIdentical(srcElem, tgtElem) {
-		return fmt.Sprintf("%s[i]", srcField)
+		return srcField + "[i]"
 	}
 
 	if g.typesConvertible(srcElem, tgtElem) {
@@ -501,7 +501,7 @@ func (g *Generator) buildElementConversion(
 	}
 
 	// Fallback - hope for the best
-	return fmt.Sprintf("%s[i]", srcField)
+	return srcField + "[i]"
 }
 
 // buildTransformArgs builds the argument list for a transform function call.

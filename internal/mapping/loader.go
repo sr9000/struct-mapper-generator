@@ -1,8 +1,10 @@
 package mapping
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -21,7 +23,9 @@ func LoadFile(path string) (*MappingFile, error) {
 // Parse parses YAML data into a MappingFile.
 func Parse(data []byte) (*MappingFile, error) {
 	var mf MappingFile
-	if err := yaml.Unmarshal(data, &mf); err != nil {
+
+	err := yaml.Unmarshal(data, &mf)
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse mapping YAML: %w", err)
 	}
 
@@ -52,7 +56,9 @@ func (s *StringOrArray) UnmarshalYAML(node *yaml.Node) error {
 	case yaml.ScalarNode:
 		// Single string value
 		var str string
-		if err := node.Decode(&str); err != nil {
+
+		err := node.Decode(&str)
+		if err != nil {
 			return err
 		}
 
@@ -67,7 +73,9 @@ func (s *StringOrArray) UnmarshalYAML(node *yaml.Node) error {
 	case yaml.SequenceNode:
 		// Array of strings
 		var arr []string
-		if err := node.Decode(&arr); err != nil {
+
+		err := node.Decode(&arr)
+		if err != nil {
 			return err
 		}
 
@@ -82,7 +90,7 @@ func (s *StringOrArray) UnmarshalYAML(node *yaml.Node) error {
 
 // MarshalYAML implements custom YAML marshaling for StringOrArray.
 // Outputs a single string if length is 1, otherwise an array.
-func (s StringOrArray) MarshalYAML() (interface{}, error) {
+func (s StringOrArray) MarshalYAML() (any, error) {
 	if len(s) == 1 {
 		return s[0], nil
 	}
@@ -116,13 +124,7 @@ func (s StringOrArray) IsMultiple() bool {
 
 // Contains returns true if the array contains the given string.
 func (s StringOrArray) Contains(str string) bool {
-	for _, v := range s {
-		if v == str {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(s, str)
 }
 
 // UnmarshalYAML implements custom YAML unmarshaling for FieldRefArray.
@@ -136,14 +138,18 @@ func (f *FieldRefArray) UnmarshalYAML(node *yaml.Node) error {
 	case yaml.ScalarNode:
 		// Single string value: "Name"
 		var str string
-		if err := node.Decode(&str); err != nil {
+
+		err := node.Decode(&str)
+		if err != nil {
 			return err
 		}
+
 		if str != "" {
 			*f = FieldRefArray{{Path: str, Hint: HintNone}}
 		} else {
 			*f = FieldRefArray{}
 		}
+
 		return nil
 
 	case yaml.MappingNode:
@@ -152,20 +158,26 @@ func (f *FieldRefArray) UnmarshalYAML(node *yaml.Node) error {
 		if err != nil {
 			return err
 		}
+
 		*f = FieldRefArray{ref}
+
 		return nil
 
 	case yaml.SequenceNode:
 		// Array of items
 		var refs []FieldRef
+
 		for _, item := range node.Content {
 			switch item.Kind {
 			case yaml.ScalarNode:
 				// String item: "Name"
 				var str string
-				if err := item.Decode(&str); err != nil {
+
+				err := item.Decode(&str)
+				if err != nil {
 					return err
 				}
+
 				refs = append(refs, FieldRef{Path: str, Hint: HintNone})
 
 			case yaml.MappingNode:
@@ -174,13 +186,16 @@ func (f *FieldRefArray) UnmarshalYAML(node *yaml.Node) error {
 				if err != nil {
 					return err
 				}
+
 				refs = append(refs, ref)
 
 			default:
 				return fmt.Errorf("expected string or map in array, got %v", item.Kind)
 			}
 		}
+
 		*f = refs
+
 		return nil
 
 	default:
@@ -191,15 +206,21 @@ func (f *FieldRefArray) UnmarshalYAML(node *yaml.Node) error {
 // parseFieldRefFromMap parses a YAML mapping node like {Name: dive} into a FieldRef.
 func parseFieldRefFromMap(node *yaml.Node) (FieldRef, error) {
 	if node.Kind != yaml.MappingNode || len(node.Content) != 2 {
-		return FieldRef{}, fmt.Errorf("expected single key-value map like {Name: dive}")
+		return FieldRef{}, errors.New("expected single key-value map like {Name: dive}")
 	}
 
-	var path string
-	var hint string
-	if err := node.Content[0].Decode(&path); err != nil {
+	var (
+		path string
+		hint string
+	)
+
+	err := node.Content[0].Decode(&path)
+	if err != nil {
 		return FieldRef{}, fmt.Errorf("invalid field path: %w", err)
 	}
-	if err := node.Content[1].Decode(&hint); err != nil {
+
+	err = node.Content[1].Decode(&hint)
+	if err != nil {
 		return FieldRef{}, fmt.Errorf("invalid hint value: %w", err)
 	}
 
@@ -216,7 +237,7 @@ func parseFieldRefFromMap(node *yaml.Node) (FieldRef, error) {
 //   - Single string if length is 1 and no hint
 //   - Single map if length is 1 with hint
 //   - Array otherwise
-func (f FieldRefArray) MarshalYAML() (interface{}, error) {
+func (f FieldRefArray) MarshalYAML() (any, error) {
 	if len(f) == 0 {
 		return nil, nil
 	}
@@ -230,7 +251,8 @@ func (f FieldRefArray) MarshalYAML() (interface{}, error) {
 	}
 
 	// Array of items
-	result := make([]interface{}, len(f))
+	result := make([]any, len(f))
+
 	for i, ref := range f {
 		if ref.Hint == HintNone {
 			result[i] = ref.Path
@@ -238,6 +260,7 @@ func (f FieldRefArray) MarshalYAML() (interface{}, error) {
 			result[i] = map[string]string{ref.Path: string(ref.Hint)}
 		}
 	}
+
 	return result, nil
 }
 
@@ -245,14 +268,14 @@ func (f FieldRefArray) MarshalYAML() (interface{}, error) {
 // Supports: "Field", "Nested.Field", "Items[]", "Items[].ProductID".
 func ParsePath(path string) (FieldPath, error) {
 	if path == "" {
-		return FieldPath{}, fmt.Errorf("empty path")
+		return FieldPath{}, errors.New("empty path")
 	}
 
 	var segments []PathSegment
 
-	parts := strings.Split(path, ".")
+	parts := strings.SplitSeq(path, ".")
 
-	for _, part := range parts {
+	for part := range parts {
 		if part == "" {
 			return FieldPath{}, fmt.Errorf("invalid path %q: empty segment", path)
 		}

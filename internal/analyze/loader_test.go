@@ -60,12 +60,14 @@ func TestAnalyzer_FieldTags(t *testing.T) {
 
 	// Find the SKU field
 	var skuField *FieldInfo
+
 	for i := range product.Fields {
 		if product.Fields[i].Name == "SKU" {
 			skuField = &product.Fields[i]
 			break
 		}
 	}
+
 	require.NotNil(t, skuField)
 
 	// Check JSON tag
@@ -84,12 +86,14 @@ func TestAnalyzer_SliceField(t *testing.T) {
 
 	// Find Items field
 	var itemsField *FieldInfo
+
 	for i := range order.Fields {
 		if order.Fields[i].Name == "Items" {
 			itemsField = &order.Fields[i]
 			break
 		}
 	}
+
 	require.NotNil(t, itemsField)
 
 	// Items should be a slice
@@ -109,12 +113,14 @@ func TestAnalyzer_PointerField(t *testing.T) {
 
 	// Find Address field (which is *string)
 	var addressField *FieldInfo
+
 	for i := range customer.Fields {
 		if customer.Fields[i].Name == "Address" {
 			addressField = &customer.Fields[i]
 			break
 		}
 	}
+
 	require.NotNil(t, addressField)
 
 	// Address should be a pointer

@@ -44,12 +44,14 @@ func TestTypeStringer_TypeString(t *testing.T) {
 
 	// Test slice field
 	var itemsField *FieldInfo
+
 	for i := range order.Fields {
 		if order.Fields[i].Name == "Items" {
 			itemsField = &order.Fields[i]
 			break
 		}
 	}
+
 	require.NotNil(t, itemsField)
 	assert.Equal(t, "[]OrderItem", stringer.TypeString(itemsField.Type))
 

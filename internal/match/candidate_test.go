@@ -315,7 +315,8 @@ func TestRankCandidates_Determinism(t *testing.T) {
 
 	// All have similar scores, so tie-breaker (alphabetical) should be consistent
 	firstRun := RankCandidates(targetField, sourceFields)
-	for i := 0; i < 10; i++ {
+
+	for i := range 10 {
 		nextRun := RankCandidates(targetField, sourceFields)
 		for j := range firstRun {
 			if firstRun[j].SourceField.Name != nextRun[j].SourceField.Name {

@@ -5,14 +5,16 @@ package match
 // or substitutions) required to transform one string into the other.
 //
 // Time complexity: O(len(a) * len(b))
-// Space complexity: O(min(len(a), len(b)))
+// Space complexity: O(min(len(a), len(b))).
 func Levenshtein(a, b string) int {
 	if a == b {
 		return 0
 	}
+
 	if len(a) == 0 {
 		return len(b)
 	}
+
 	if len(b) == 0 {
 		return len(a)
 	}
@@ -34,17 +36,20 @@ func Levenshtein(a, b string) int {
 	// Fill in the rest of the matrix
 	for j := 1; j <= len(b); j++ {
 		curr[0] = j
+
 		for i := 1; i <= len(a); i++ {
 			cost := 0
 			if a[i-1] != b[j-1] {
 				cost = 1
 			}
+
 			curr[i] = min3(
 				prev[i]+1,      // deletion
 				curr[i-1]+1,    // insertion
 				prev[i-1]+cost, // substitution
 			)
 		}
+
 		prev, curr = curr, prev
 	}
 
@@ -53,16 +58,16 @@ func Levenshtein(a, b string) int {
 
 // LevenshteinNormalized computes a normalized similarity score between 0 and 1.
 // 1.0 means identical strings, 0.0 means completely different.
-// The score is: 1 - (distance / max(len(a), len(b)))
+// The score is: 1 - (distance / max(len(a), len(b))).
 func LevenshteinNormalized(a, b string) float64 {
 	if len(a) == 0 && len(b) == 0 {
 		return 1.0
 	}
-	maxLen := len(a)
-	if len(b) > maxLen {
-		maxLen = len(b)
-	}
+
+	maxLen := max(len(b), len(a))
+
 	distance := Levenshtein(a, b)
+
 	return 1.0 - float64(distance)/float64(maxLen)
 }
 
@@ -71,6 +76,7 @@ func LevenshteinNormalized(a, b string) float64 {
 func NormalizedLevenshteinScore(a, b string) float64 {
 	normA := NormalizeIdent(a)
 	normB := NormalizeIdent(b)
+
 	return LevenshteinNormalized(normA, normB)
 }
 
@@ -79,6 +85,7 @@ func NormalizedLevenshteinScore(a, b string) float64 {
 func NormalizedLevenshteinScoreWithSuffixStrip(a, b string) float64 {
 	normA := NormalizeIdentWithSuffixStrip(a)
 	normB := NormalizeIdentWithSuffixStrip(b)
+
 	return LevenshteinNormalized(normA, normB)
 }
 
@@ -87,10 +94,13 @@ func min3(a, b, c int) int {
 		if a < c {
 			return a
 		}
+
 		return c
 	}
+
 	if b < c {
 		return b
 	}
+
 	return c
 }

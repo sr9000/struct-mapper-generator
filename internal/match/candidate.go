@@ -51,7 +51,9 @@ func RankCandidates(
 
 		// Calculate name similarity (use max of regular and suffix-stripped)
 		nameScore := LevenshteinNormalized(sourceNorm, targetNorm)
+
 		nameScoreStripped := LevenshteinNormalized(sourceNormStripped, targetNormStripped)
+
 		if nameScoreStripped > nameScore {
 			nameScore = nameScoreStripped
 		}
@@ -112,7 +114,9 @@ func RankCandidatesWithTypes(
 
 		// Calculate name similarity
 		nameScore := LevenshteinNormalized(sourceNorm, targetNorm)
+
 		nameScoreStripped := LevenshteinNormalized(sourceNormStripped, targetNormStripped)
+
 		if nameScoreStripped > nameScore {
 			nameScore = nameScoreStripped
 		}
@@ -164,6 +168,7 @@ func calculateCombinedScore(nameScore float64, typeCompat TypeCompatibility) flo
 
 	// Normalize type compatibility to 0-1 range
 	var typeScore float64
+
 	switch typeCompat {
 	case TypeIdentical:
 		typeScore = 1.0
@@ -202,6 +207,7 @@ func (c CandidateList) Top(n int) CandidateList {
 	if n >= len(c) {
 		return c
 	}
+
 	return c[:n]
 }
 
@@ -210,6 +216,7 @@ func (c CandidateList) Best() *Candidate {
 	if len(c) == 0 {
 		return nil
 	}
+
 	return &c[0]
 }
 
@@ -218,18 +225,22 @@ func (c CandidateList) IsAmbiguous(threshold float64) bool {
 	if len(c) < 2 {
 		return false
 	}
+
 	diff := c[0].CombinedScore - c[1].CombinedScore
+
 	return diff < threshold
 }
 
 // AboveThreshold returns candidates with combined score above the threshold.
 func (c CandidateList) AboveThreshold(threshold float64) CandidateList {
 	var result CandidateList
+
 	for _, cand := range c {
 		if cand.CombinedScore >= threshold {
 			result = append(result, cand)
 		}
 	}
+
 	return result
 }
 
@@ -239,6 +250,7 @@ func (c CandidateList) HighConfidence(minScore, minGap float64) *Candidate {
 	if len(c) == 0 {
 		return nil
 	}
+
 	best := &c[0]
 
 	// Must meet minimum score threshold

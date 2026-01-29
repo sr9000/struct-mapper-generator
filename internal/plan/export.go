@@ -2,6 +2,7 @@ package plan
 
 import (
 	"fmt"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -98,6 +99,7 @@ func exportFieldMapping(m *ResolvedFieldMapping) mapping.FieldMapping {
 
 	// Set targets with hints
 	targets := make(mapping.FieldRefArray, len(m.TargetPaths))
+
 	for i, tp := range m.TargetPaths {
 		hint := mapping.HintNone
 		// Apply effective hint to the first target (following cardinality rules)
@@ -107,13 +109,16 @@ func exportFieldMapping(m *ResolvedFieldMapping) mapping.FieldMapping {
 				hint = m.EffectiveHint
 			}
 		}
+
 		targets[i] = mapping.FieldRef{Path: tp.String(), Hint: hint}
 	}
+
 	fm.Target = targets
 
 	// Set sources with hints
 	if len(m.SourcePaths) > 0 {
 		sources := make(mapping.FieldRefArray, len(m.SourcePaths))
+
 		for i, sp := range m.SourcePaths {
 			hint := mapping.HintNone
 			// Apply effective hint to the first source for 1:N or 1:1
@@ -122,8 +127,10 @@ func exportFieldMapping(m *ResolvedFieldMapping) mapping.FieldMapping {
 					hint = m.EffectiveHint
 				}
 			}
+
 			sources[i] = mapping.FieldRef{Path: sp.String(), Hint: hint}
 		}
+
 		fm.Source = sources
 	}
 
@@ -247,39 +254,59 @@ func GenerateReport(plan *ResolvedMappingPlan) *SuggestionReport {
 func FormatReport(report *SuggestionReport) string {
 	var result string
 
+	var resultSb250 strings.Builder
+	var resultSb258 strings.Builder
 	for _, tp := range report.TypePairs {
-		result += fmt.Sprintf("\n=== %s -> %s ===\n", tp.Source, tp.Target)
-		result += fmt.Sprintf("Explicit: %d, Ignored: %d, Auto-matched: %d, Unmapped: %d\n",
-			tp.ExplicitCount, tp.IgnoredCount, len(tp.AutoMatched), len(tp.Unmapped))
+		resultSb250.WriteString(fmt.Sprintf("\n=== %s -> %s ===\n", tp.Source, tp.Target))
+		resultSb250.WriteString(fmt.Sprintf("Explicit: %d, Ignored: %d, Auto-matched: %d, Unmapped: %d\n",
+			tp.ExplicitCount, tp.IgnoredCount, len(tp.AutoMatched), len(tp.Unmapped)))
 
 		if len(tp.AutoMatched) > 0 {
-			result += "\nAuto-matched fields:\n"
+			resultSb250.WriteString("\nAuto-matched fields:\n")
+
+			var resultSb257 strings.Builder
 			for _, m := range tp.AutoMatched {
-				result += fmt.Sprintf("  ✓ %s -> %s (%.0f%%, %s)\n",
-					m.SourceField, m.TargetField, m.Confidence*100, m.Strategy)
+				resultSb257.WriteString(fmt.Sprintf("  ✓ %s -> %s (%.0f%%, %s)\n",
+					m.SourceField, m.TargetField, m.Confidence*100, m.Strategy))
 			}
+
+			resultSb258.WriteString(resultSb257.String())
 		}
 
 		if len(tp.Unmapped) > 0 {
-			result += "\nUnmapped target fields (need review):\n"
+			resultSb250.WriteString("\nUnmapped target fields (need review):\n")
+
+			var resultSb265 strings.Builder
+			var resultSb276 strings.Builder
 			for _, um := range tp.Unmapped {
-				result += fmt.Sprintf("  ✗ %s: %s\n", um.TargetField, um.Reason)
+				resultSb265.WriteString(fmt.Sprintf("  ✗ %s: %s\n", um.TargetField, um.Reason))
+
 				if len(um.Candidates) > 0 {
-					result += "    Suggestions:\n"
+					resultSb265.WriteString("    Suggestions:\n")
+
+					var resultSb269 strings.Builder
 					for i, c := range um.Candidates {
-						result += fmt.Sprintf("      %d. %s (%.0f%%, %s)\n",
-							i+1, c.SourceField, c.Score*100, c.TypeCompat)
+						resultSb269.WriteString(fmt.Sprintf("      %d. %s (%.0f%%, %s)\n",
+							i+1, c.SourceField, c.Score*100, c.TypeCompat))
 					}
+
+					resultSb276.WriteString(resultSb269.String())
 				}
 			}
+			result += resultSb276.String()
+
+			resultSb258.WriteString(resultSb265.String())
 		}
 
 		if tp.NeedsReview {
-			result += "\n⚠ This type pair needs manual review.\n"
+			resultSb250.WriteString("\n⚠ This type pair needs manual review.\n")
 		} else {
-			result += "\n✓ All target fields mapped.\n"
+			resultSb250.WriteString("\n✓ All target fields mapped.\n")
 		}
 	}
+	result += resultSb258.String()
+
+	result += resultSb250.String()
 
 	return result
 }

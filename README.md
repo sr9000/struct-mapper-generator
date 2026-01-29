@@ -1,145 +1,264 @@
-# caster-generator
+# 🎯 caster-generator
 
-A Go codegen tool that **analyzes two Go domain models** (for example `store.Order` and `warehouse.Order`) and **generates “caster” functions** to convert values between them.
+**A magic tool that writes boring Go code for you!**
 
-This repo currently contains two example domains:
+## 🤔 What Does It Do?
 
-- `store/` — lightweight JSON/API domain types
-- `warehouse/` — persistence/warehouse domain types (GORM-style, denormalized snapshots)
+Imagine you have two toy boxes:
+- **Box A** has toys with labels like `toy_name`, `toy_color`
+- **Box B** needs the same toys but with labels like `Name`, `Color`
 
-The generator’s job is to bridge these domains safely and repeatably.
+**caster-generator** helps you move toys from Box A to Box B automatically! ✨
 
----
-
-## Decomposed abilities (grouped by domain)
-
-### Store → Warehouse
-
-**Goal:** Take `store.*` values and produce `warehouse.*` values suitable for persistence/fulfillment.
-
-Capabilities:
-
-- **Type casting / conversion generation**
-  - Generates cast functions like `StoreOrderToWarehouseOrder(store.Order) warehouse.Order`.
-  - Handles numeric widening/narrowing where safe (ex: `int64` → `uint`) with configurable guards.
-  - Supports pointer lifting (ex: `time.Time` → `*time.Time`) and defaulting.
-
-- **Snapshot + denormalization support**
-  - Supports generating “snapshot” fields in the target (example: `warehouse.Order.ShippingAddress` embedded fields).
-  - Allows mapping a single source value into multiple target fields (1 → many).
-
-- **Collection and line-item conversion**
-  - Converts slices/arrays (ex: `[]store.OrderItem` → `[]warehouse.OrderItem`).
-  - Supports nested conversion and propagating parent keys where required.
-
-### Warehouse → Store
-
-**Goal:** Take `warehouse.*` values and produce `store.*` values suitable for APIs/UI.
-
-Capabilities:
-
-- **Type casting / conversion generation**
-  - Generates cast functions like `WarehouseOrderToStoreOrder(warehouse.Order) store.Order`.
-  - Handles embedded structs → flattened fields when needed.
-
-- **Aggregation and projection**
-  - Supports mapping many source fields into a single target field (many → 1)
-    - Example: `FirstName` + `LastName` → `FullName`.
-
-- **Filtering / shaping output**
-  - Allows ignoring fields that don’t make sense to expose (e.g. `PasswordHash`).
+In programmer talk: it generates code to convert one Go struct to another.
 
 ---
 
-## Matching & mapping engine
+## 🚀 Quick Start (5 Steps!)
 
-### Field and type matching (fuzzy)
+### Step 1: Build the Tool
+```bash
+make build
+```
 
-When a mapping isn’t explicitly provided, the tool **suggests** candidate field mappings using a fuzzy match pipeline:
+### Step 2: Look at Your Structs
+```bash
+./caster-generator analyze -pkg ./store -pkg ./warehouse
+```
+This shows you what's inside your "toy boxes"!
 
-1. **Field-name normalization**
-   - Normalizes identifiers before comparing.
-   - Typical normalization includes:
-     - case folding (`CreatedAt` → `createdat`)
-     - removing separators/underscores/dashes (`postal_code` → `postalcode`)
-     - optional suffix/prefix trimming (`ID`, `Ids`, `At`, etc.)
+### Step 3: Get Magic Suggestions
+```bash
+./caster-generator suggest -from store.Order -to warehouse.Order -out mapping.yaml
+```
+This creates a file that says "put THIS toy from Box A into THAT spot in Box B"!
 
-2. **Levenshtein distance scoring**
-   - Uses **Levenshtein distance** (edit distance) between normalized names to rank candidates.
-   - Lower distance = better match.
+### Step 4: Generate the Code
+```bash
+./caster-generator gen -mapping mapping.yaml -out ./generated
+```
+This writes the boring code for you! 🎉
 
-3. **Type-compatibility scoring**
-   - Candidate mappings are adjusted based on type compatibility (exact match, convertible, needs transform).
-
-4. **Conflict detection**
-   - Detects ambiguous matches and reports them so they can be resolved via YAML overrides.
-
-### Cardinality-aware mapping
-
-The mapping model supports different “shapes”, not only 1:1:
-
-- **1 → many**: one source field populates multiple target fields
-  - Example: `store.Customer.FullName` → `warehouse.Customer.FirstName`, `warehouse.Customer.LastName`.
-- **many → 1**: multiple source fields combine into one target field
-  - Example: `warehouse.Customer.FirstName` + `warehouse.Customer.LastName` → `store.Customer.FullName`.
-- **many ↔ many**: transform between collections/records
-  - Example: `store.Order.Items` ↔ `warehouse.Order.Items` with per-item conversion.
+### Step 5: Check Everything is OK
+```bash
+./caster-generator check -mapping mapping.yaml
+```
+This makes sure nothing is broken!
 
 ---
 
-## YAML mapping definitions
+## 📖 All Commands
 
-YAML mappings are a **first-class** part of the tool.
+### `analyze` - Look Inside Packages
+Shows you all the structs (toy boxes) in your packages.
 
-They let you:
+```bash
+./caster-generator analyze -pkg ./mypackage
+```
 
-- pin exact source→target field mappings (authoritative overrides)
-- define 1→many / many→1 / many↔many transformations
-- ignore fields
-- configure defaults
-- declare custom transforms (by name) used during code generation
+| Option | What It Does |
+|--------|--------------|
+| `-pkg` | Which package to look at (you can use this many times!) |
+| `-type` | Only show one specific struct |
+| `-verbose` | Show extra details like tags |
 
-A typical mapping file expresses:
-
-- the **source type** (e.g. `store.Order`)
-- the **target type** (e.g. `warehouse.Order`)
-- field rules (direct map, ignore, default, transform)
-
-(Exact schema may evolve; the intent is stable: YAML drives deterministic codegen and resolves fuzzy-match ambiguities.)
-
----
-
-## Generate a new domain type (derived)
-
-Beyond casting, the tool can generate a **new derived type** based on an existing one.
-
-Use-cases:
-
-- create a “view model” / “DTO” subset of a large domain type
-- generate a denormalized snapshot type for persistence
-- produce compatibility types while refactoring
-
-Capabilities:
-
-- pick a base type (e.g. `warehouse.Order`)
-- select/rename fields
-- apply tags (json/gorm)
-- emit a new struct + optional caster to/from the base type
+**Example:**
+```bash
+./caster-generator analyze -pkg ./store -pkg ./warehouse -verbose
+```
 
 ---
 
-## What this repository demonstrates
+### `suggest` - Get Smart Suggestions
+Creates a YAML file with mapping suggestions!
 
-These example domains intentionally differ so the generator must handle:
+```bash
+./caster-generator suggest -from store.Order -to warehouse.Order -out mapping.yaml
+```
 
-- different ID types (`int64` in `store` vs `uint` in `warehouse`)
-- enum-like status (`store.OrderStatus`) vs string status (`warehouse.Order.Status`)
-- denormalized address snapshots (`warehouse.Order` embeds addresses)
-- nested relationships (`Order` → `Items`)
+| Option | What It Does |
+|--------|--------------|
+| `-from` | Source struct (where toys come FROM) |
+| `-to` | Target struct (where toys go TO) |
+| `-out` | Where to save the YAML file |
+| `-pkg` | Extra packages to load (optional) |
+| `-min-confidence` | How sure it needs to be (default: 0.7 = 70%) |
+
+**Example:**
+```bash
+./caster-generator suggest -from store.Customer -to warehouse.Customer -out customer-mapping.yaml
+```
 
 ---
 
-## Non-goals
+### `gen` - Generate Code 
+Creates actual Go code files!
 
-- Not a runtime reflection mapper. Output is intended to be **generated Go code**.
-- Not an ORM. It only converts data shapes.
+```bash
+./caster-generator gen -mapping mapping.yaml -out ./generated
+```
+
+| Option | What It Does |
+|--------|--------------|
+| `-mapping` | Your YAML mapping file (required!) |
+| `-out` | Where to put generated files (default: `./generated`) |
+| `-package` | Package name for generated code (default: `casters`) |
+| `-pkg` | Extra packages to load (optional) |
+| `-strict` | Stop if any field can't be mapped |
+| `-write-suggestions` | Save suggestions to another file |
+
+**Example:**
+```bash
+./caster-generator gen -mapping mapping.yaml -out ./converters -package converters
+```
+
+---
+
+### `check` - Validate Mapping
+Makes sure your mapping file still works with your code!
+
+```bash
+./caster-generator check -mapping mapping.yaml
+```
+
+| Option | What It Does |
+|--------|--------------|
+| `-mapping` | Your YAML mapping file (required!) |
+| `-pkg` | Extra packages to load (optional) |
+| `-strict` | Fail if any field is unmapped |
+
+**Example:**
+```bash
+./caster-generator check -mapping mapping.yaml -strict
+```
+
+---
+
+## 📝 The Mapping File (YAML)
+
+The mapping file tells the tool how to match fields:
+
+```yaml
+version: "1"
+mappings:
+  - source: store.Order      # FROM this struct
+    target: warehouse.Order  # TO this struct
+    
+    # Simple 1-to-1 mappings (field A goes to field B)
+    121:
+      ID: OrderID
+      CustomerID: CustomerID
+    
+    # Fields to skip
+    ignore:
+      - InternalField
+      - TempData
+```
+
+### YAML Sections Explained:
+
+| Section | What It Does |
+|---------|--------------|
+| `source` | The struct you're copying FROM |
+| `target` | The struct you're copying TO |
+| `121` | Simple field mappings (source field → target field) |
+| `fields` | Complex mappings (when you need transforms) |
+| `ignore` | Fields to skip |
+| `auto` | Automatically matched fields |
+
+---
+
+## 🔧 Makefile Commands
+
+```bash
+make help     # Show all commands
+make build    # Build the tool
+make test     # Run tests
+make lint     # Check code style
+make bench    # Run benchmarks
+make cover    # See test coverage
+make clean    # Clean up
+make all      # Run everything!
+```
+
+---
+
+## 🎨 Complete Example
+
+Let's convert a `store.Product` to `warehouse.Product`!
+
+**1. Your source struct (`store/types.go`):**
+```go
+type Product struct {
+    ID          int64  `json:"id"`
+    Name        string `json:"name"`
+    PriceCents  int64  `json:"price_cents"`
+}
+```
+
+**2. Your target struct (`warehouse/types.go`):**
+```go
+type Product struct {
+    ProductID   uint   `json:"product_id"`
+    ProductName string `json:"product_name"`
+    Price       int64  `json:"price"`
+}
+```
+
+**3. Generate suggestions:**
+```bash
+./caster-generator suggest -from store.Product -to warehouse.Product -out product.yaml
+```
+
+**4. Edit `product.yaml` if needed:**
+```yaml
+version: "1"
+mappings:
+  - source: store.Product
+    target: warehouse.Product
+    121:
+      ID: ProductID
+      Name: ProductName
+      PriceCents: Price
+```
+
+**5. Generate the code:**
+```bash
+./caster-generator gen -mapping product.yaml -out ./generated
+```
+
+**6. Use the generated code:**
+```go
+import "myproject/generated"
+
+func main() {
+    storeProduct := store.Product{ID: 1, Name: "Widget", PriceCents: 999}
+    warehouseProduct := generated.StoreProductToWarehouseProduct(storeProduct)
+}
+```
+
+---
+
+## ❓ FAQ
+
+**Q: What if fields have different types?**  
+A: The tool handles basic conversions (like `int` to `int64`). For complex conversions, use transforms!
+
+**Q: What if a field doesn't exist in the target?**  
+A: It will be marked as "unmapped" in the diagnostics. You can ignore it or map it manually.
+
+**Q: Can I use this with nested structs?**  
+A: Yes! It handles nested structs and slices automatically.
+
+**Q: What if I change my structs later?**  
+A: Run `check` to find what broke, then regenerate!
+
+---
+
+## 📜 License
+
+MIT - do whatever you want! 🎉
+
+---
+
+**Made with ❤️ to save you from writing boring code!**

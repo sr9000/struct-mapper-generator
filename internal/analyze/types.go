@@ -16,6 +16,7 @@ func (t TypeID) String() string {
 	if t.PkgPath == "" {
 		return t.Name
 	}
+
 	return t.PkgPath + "." + t.Name
 }
 
@@ -81,13 +82,15 @@ type FieldInfo struct {
 func (f *FieldInfo) JSONName() string {
 	if tag := f.Tag.Get("json"); tag != "" && tag != "-" {
 		// Parse first part before comma
-		for i := 0; i < len(tag); i++ {
+		for i := range len(tag) {
 			if tag[i] == ',' {
 				return tag[:i]
 			}
 		}
+
 		return tag
 	}
+
 	return f.Name
 }
 

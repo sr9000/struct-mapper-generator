@@ -33,9 +33,11 @@ func (p *TypePath) Slice() *TypePath {
 	if len(p.parts) == 0 {
 		return &TypePath{parts: []string{"[]"}}
 	}
+
 	newParts := make([]string, len(p.parts))
 	copy(newParts, p.parts)
 	newParts[len(newParts)-1] = newParts[len(newParts)-1] + "[]"
+
 	return &TypePath{parts: newParts}
 }
 
@@ -44,9 +46,11 @@ func (p *TypePath) Pointer() *TypePath {
 	if len(p.parts) == 0 {
 		return &TypePath{parts: []string{"*"}}
 	}
+
 	newParts := make([]string, len(p.parts))
 	copy(newParts, p.parts)
 	newParts[len(newParts)-1] = "*" + newParts[len(newParts)-1]
+
 	return &TypePath{parts: newParts}
 }
 
@@ -77,30 +81,35 @@ func (s *TypeStringer) TypeString(t *TypeInfo) string {
 		if t.IsNamed() {
 			return t.ID.Name
 		}
+
 		return "struct{...}"
 
 	case TypeKindPointer:
 		if t.ElemType != nil {
 			return "*" + s.TypeString(t.ElemType)
 		}
+
 		return "*<unknown>"
 
 	case TypeKindSlice:
 		if t.ElemType != nil {
 			return "[]" + s.TypeString(t.ElemType)
 		}
+
 		return "[]<unknown>"
 
 	case TypeKindAlias:
 		if t.IsNamed() {
 			return t.ID.Name
 		}
+
 		return s.TypeString(t.Underlying)
 
 	case TypeKindExternal:
 		if t.IsNamed() {
 			return t.ID.String()
 		}
+
 		return t.GoType.String()
 
 	default:
@@ -109,12 +118,13 @@ func (s *TypeStringer) TypeString(t *TypeInfo) string {
 }
 
 // FieldPath returns a path string for a field within a type.
-// Example: Order, Items -> "Order.Items"
+// Example: Order, Items -> "Order.Items".
 func (s *TypeStringer) FieldPath(typeName string, fieldNames ...string) string {
 	path := NewTypePath(typeName)
 	for _, fn := range fieldNames {
 		path = path.Field(fn)
 	}
+
 	return path.String()
 }
 
@@ -132,6 +142,7 @@ func (s *TypeStringer) BuildFieldPaths(root *TypeInfo, maxDepth int) map[string]
 	}
 
 	s.buildFieldPathsRecursive(root, NewTypePath(rootName), result, 0, maxDepth)
+
 	return result
 }
 

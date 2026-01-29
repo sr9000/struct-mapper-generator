@@ -109,6 +109,7 @@ Options:
 	}
 
 	var packages StringSliceFlag
+
 	fs.Var(&packages, "pkg", "Package path to analyze (can be specified multiple times)")
 	verbose := fs.Bool("verbose", false, "Show detailed field information including tags")
 	typeFilter := fs.String("type", "", "Filter to show only a specific type")
@@ -125,6 +126,7 @@ Options:
 
 	// Load packages
 	analyzer := analyze.NewAnalyzer()
+
 	graph, err := analyzer.LoadPackages(packages...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading packages: %v\n", err)
@@ -133,6 +135,7 @@ Options:
 
 	// Print discovered types
 	stringer := analyze.NewTypeStringer()
+
 	for _, pkgInfo := range graph.Packages {
 		fmt.Printf("\nPackage: %s (%s)\n", pkgInfo.Name, pkgInfo.Path)
 		fmt.Println(strings.Repeat("-", 60))
@@ -184,6 +187,7 @@ Options:
 	}
 
 	var packages StringSliceFlag
+
 	fs.Var(&packages, "pkg", "Package path to analyze (can be specified multiple times)")
 	fromType := fs.String("from", "", "Source type (e.g., store.Order)")
 	toType := fs.String("to", "", "Target type (e.g., warehouse.Order)")
@@ -204,9 +208,11 @@ Options:
 	if len(packages) == 0 {
 		fromPkg := extractPackage(*fromType)
 		toPkg := extractPackage(*toType)
+
 		if fromPkg != "" {
 			packages = append(packages, "./"+fromPkg)
 		}
+
 		if toPkg != "" && toPkg != fromPkg {
 			packages = append(packages, "./"+toPkg)
 		}
@@ -220,6 +226,7 @@ Options:
 
 	// Load packages
 	analyzer := analyze.NewAnalyzer()
+
 	graph, err := analyzer.LoadPackages(packages...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading packages: %v\n", err)
@@ -241,6 +248,7 @@ Options:
 	config := plan.DefaultConfig()
 	config.MinConfidence = *minConfidence
 	resolver := plan.NewResolver(graph, mappingDef, config)
+
 	resolvedPlan, err := resolver.Resolve()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error resolving mappings: %v\n", err)
@@ -256,10 +264,12 @@ Options:
 
 	// Write output
 	if *outFile != "" {
-		if err := os.WriteFile(*outFile, yamlData, 0o644); err != nil {
+		err := os.WriteFile(*outFile, yamlData, 0o644)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
 			os.Exit(1)
 		}
+
 		fmt.Printf("Suggested mapping written to %s\n", *outFile)
 	} else {
 		fmt.Print(string(yamlData))
@@ -283,6 +293,7 @@ Options:
 	}
 
 	var packages StringSliceFlag
+
 	fs.Var(&packages, "pkg", "Package path to analyze (can be specified multiple times)")
 	mappingFile := fs.String("mapping", "", "Path to YAML mapping file (required)")
 	outDir := fs.String("out", "./generated", "Output directory for generated files")
@@ -320,6 +331,7 @@ Options:
 
 	// Load packages
 	analyzer := analyze.NewAnalyzer()
+
 	graph, err := analyzer.LoadPackages(packages...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading packages: %v\n", err)
@@ -329,9 +341,11 @@ Options:
 	// Validate mapping against type graph
 	if result := mapping.Validate(mappingDef, graph); !result.IsValid() {
 		fmt.Fprintln(os.Stderr, "Mapping validation errors:")
+
 		for _, e := range result.Errors {
 			fmt.Fprintf(os.Stderr, "  - %v\n", e)
 		}
+
 		os.Exit(1)
 	}
 
@@ -339,6 +353,7 @@ Options:
 	config := plan.DefaultConfig()
 	config.StrictMode = *strict
 	resolver := plan.NewResolver(graph, mappingDef, config)
+
 	resolvedPlan, err := resolver.Resolve()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error resolving mappings: %v\n", err)
@@ -355,10 +370,12 @@ Options:
 			fmt.Fprintf(os.Stderr, "Error exporting suggestions: %v\n", err)
 			os.Exit(1)
 		}
+
 		if err := os.WriteFile(*writeSuggestions, yamlData, 0o644); err != nil {
 			fmt.Fprintf(os.Stderr, "Error writing suggestions file: %v\n", err)
 			os.Exit(1)
 		}
+
 		fmt.Printf("Suggested mapping written to %s\n", *writeSuggestions)
 	}
 
@@ -383,6 +400,7 @@ Options:
 	}
 
 	fmt.Printf("Generated %d file(s) in %s\n", len(files), *outDir)
+
 	for _, f := range files {
 		fmt.Printf("  - %s\n", f.Filename)
 	}
@@ -402,6 +420,7 @@ Options:
 	}
 
 	var packages StringSliceFlag
+
 	fs.Var(&packages, "pkg", "Package path to analyze (can be specified multiple times)")
 	mappingFile := fs.String("mapping", "", "Path to YAML mapping file (required)")
 	strict := fs.Bool("strict", false, "Fail on any unresolved target fields")
@@ -436,6 +455,7 @@ Options:
 
 	// Load packages
 	analyzer := analyze.NewAnalyzer()
+
 	graph, err := analyzer.LoadPackages(packages...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading packages: %v\n", err)
@@ -446,9 +466,11 @@ Options:
 	validationResult := mapping.Validate(mappingDef, graph)
 	if !validationResult.IsValid() {
 		fmt.Fprintln(os.Stderr, "Mapping validation errors:")
+
 		for _, e := range validationResult.Errors {
 			fmt.Fprintf(os.Stderr, "  - %v\n", e)
 		}
+
 		os.Exit(1)
 	}
 
@@ -456,6 +478,7 @@ Options:
 	config := plan.DefaultConfig()
 	config.StrictMode = *strict
 	resolver := plan.NewResolver(graph, mappingDef, config)
+
 	resolvedPlan, err := resolver.Resolve()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error resolving mappings: %v\n", err)
@@ -467,10 +490,13 @@ Options:
 
 	// Check for issues
 	hasIssues := false
+
 	for _, tp := range resolvedPlan.TypePairs {
 		if len(tp.UnmappedTargets) > 0 {
 			hasIssues = true
+
 			fmt.Printf("\nUnmapped targets in %s -> %s:\n", tp.SourceType.ID, tp.TargetType.ID)
+
 			for _, um := range tp.UnmappedTargets {
 				fmt.Printf("  - %s: %s\n", um.TargetPath, um.Reason)
 			}
@@ -498,6 +524,7 @@ func extractPackage(typeName string) string {
 	if lastDot == -1 {
 		return ""
 	}
+
 	return typeName[:lastDot]
 }
 
@@ -514,6 +541,7 @@ func extractPackagesFromMapping(mf *mapping.MappingFile) []string {
 				pkgSet["./"+pkg] = true
 			}
 		}
+
 		if pkg := extractPackage(tm.Target); pkg != "" {
 			// Check if it's a full import path or relative
 			if strings.Contains(pkg, "/") {
@@ -528,6 +556,7 @@ func extractPackagesFromMapping(mf *mapping.MappingFile) []string {
 	for pkg := range pkgSet {
 		packages = append(packages, pkg)
 	}
+
 	return packages
 }
 
@@ -535,11 +564,14 @@ func extractPackagesFromMapping(mf *mapping.MappingFile) []string {
 func printDiagnostics(diags *plan.Diagnostics) {
 	if len(diags.Warnings) > 0 {
 		fmt.Fprintln(os.Stderr, "\nWarnings:")
+
 		for _, w := range diags.Warnings {
 			fmt.Fprintf(os.Stderr, "  [%s] %s\n", w.Code, w.Message)
+
 			if w.TypePair != "" {
 				fmt.Fprintf(os.Stderr, "    type pair: %s\n", w.TypePair)
 			}
+
 			if w.FieldPath != "" {
 				fmt.Fprintf(os.Stderr, "    field: %s\n", w.FieldPath)
 			}
@@ -548,11 +580,14 @@ func printDiagnostics(diags *plan.Diagnostics) {
 
 	if len(diags.Errors) > 0 {
 		fmt.Fprintln(os.Stderr, "\nErrors:")
+
 		for _, e := range diags.Errors {
 			fmt.Fprintf(os.Stderr, "  [%s] %s\n", e.Code, e.Message)
+
 			if e.TypePair != "" {
 				fmt.Fprintf(os.Stderr, "    type pair: %s\n", e.TypePair)
 			}
+
 			if e.FieldPath != "" {
 				fmt.Fprintf(os.Stderr, "    field: %s\n", e.FieldPath)
 			}

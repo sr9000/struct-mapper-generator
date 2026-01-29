@@ -198,7 +198,9 @@ func IsNumericType(t types.Type) bool {
 	if !ok {
 		return false
 	}
+
 	info := basic.Info()
+
 	return info&types.IsNumeric != 0
 }
 
@@ -208,5 +210,6 @@ func IsStringType(t types.Type) bool {
 	if !ok {
 		return false
 	}
+
 	return basic.Kind() == types.String
 }

@@ -44,18 +44,21 @@ func (a *Analyzer) LoadPackages(patterns ...string) (*TypeGraph, error) {
 
 	// Check for package errors
 	var errs []error
+
 	for _, pkg := range pkgs {
 		for _, e := range pkg.Errors {
 			errs = append(errs, e)
 		}
 	}
+
 	if len(errs) > 0 {
 		return nil, fmt.Errorf("package errors: %v", errs)
 	}
 
 	// Process each package
 	for _, pkg := range pkgs {
-		if err := a.processPackage(pkg); err != nil {
+		err := a.processPackage(pkg)
+		if err != nil {
 			return nil, fmt.Errorf("failed to process package %s: %w", pkg.PkgPath, err)
 		}
 	}
@@ -99,10 +102,12 @@ func (a *Analyzer) processPackage(pkg *packages.Package) error {
 		typeInfo.ID = typeID
 
 		a.graph.Types[typeID] = typeInfo
+
 		pkgInfo.Types = append(pkgInfo.Types, typeID)
 	}
 
 	a.graph.Packages[pkg.PkgPath] = pkgInfo
+
 	return nil
 }
 
@@ -213,12 +218,16 @@ func (a *Analyzer) analyzeStructFields(st *types.Struct, info *TypeInfo) {
 // The typeName should be in the format "package.TypeName" (e.g., "store.Order").
 func (a *Analyzer) GetStruct(pkgPath, typeName string) (*TypeInfo, error) {
 	id := TypeID{PkgPath: pkgPath, Name: typeName}
+
 	info := a.graph.GetType(id)
+
 	if info == nil {
 		return nil, fmt.Errorf("type %s not found", id)
 	}
+
 	if info.Kind != TypeKindStruct {
 		return nil, fmt.Errorf("type %s is not a struct (kind: %s)", id, info.Kind)
 	}
+
 	return info, nil
 }

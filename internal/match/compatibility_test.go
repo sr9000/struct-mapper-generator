@@ -31,12 +31,15 @@ func TestTypeCompatibility_Score(t *testing.T) {
 	if TypeIncompatible.Score() >= TypeNeedsTransform.Score() {
 		t.Error("TypeIncompatible should have lower score than TypeNeedsTransform")
 	}
+
 	if TypeNeedsTransform.Score() >= TypeConvertible.Score() {
 		t.Error("TypeNeedsTransform should have lower score than TypeConvertible")
 	}
+
 	if TypeConvertible.Score() >= TypeAssignable.Score() {
 		t.Error("TypeConvertible should have lower score than TypeAssignable")
 	}
+
 	if TypeAssignable.Score() >= TypeIdentical.Score() {
 		t.Error("TypeAssignable should have lower score than TypeIdentical")
 	}

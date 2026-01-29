@@ -8,7 +8,7 @@ import (
 	"caster-generator/internal/mapping"
 )
 
-// Helper function to create a basic TypeInfo with GoType set
+// Helper function to create a basic TypeInfo with GoType set.
 func basicTypeInfo() *analyze.TypeInfo {
 	return &analyze.TypeInfo{
 		Kind:   analyze.TypeKindBasic,
@@ -62,8 +62,8 @@ func TestResolverBasic(t *testing.T) {
 	}
 
 	resolver := NewResolver(graph, mf, DefaultConfig())
-	plan, err := resolver.Resolve()
 
+	plan, err := resolver.Resolve()
 	if err != nil {
 		t.Fatalf("Resolve failed: %v", err)
 	}
@@ -124,8 +124,8 @@ func TestResolverAutoMatch(t *testing.T) {
 	}
 
 	resolver := NewResolver(graph, mf, DefaultConfig())
-	plan, err := resolver.Resolve()
 
+	plan, err := resolver.Resolve()
 	if err != nil {
 		t.Fatalf("Resolve failed: %v", err)
 	}
@@ -134,6 +134,7 @@ func TestResolverAutoMatch(t *testing.T) {
 
 	// Should auto-match ID and Name, but not Cost (different name, low confidence)
 	autoMatched := 0
+
 	for _, m := range tp.Mappings {
 		if m.Source == MappingSourceAutoMatched {
 			autoMatched++
@@ -197,8 +198,8 @@ func TestResolverPriority(t *testing.T) {
 	}
 
 	resolver := NewResolver(graph, mf, DefaultConfig())
-	plan, err := resolver.Resolve()
 
+	plan, err := resolver.Resolve()
 	if err != nil {
 		t.Fatalf("Resolve failed: %v", err)
 	}
@@ -207,6 +208,7 @@ func TestResolverPriority(t *testing.T) {
 
 	// Find X mapping - should be from 121
 	var xMapping *ResolvedFieldMapping
+
 	for i := range tp.Mappings {
 		if len(tp.Mappings[i].TargetPaths) > 0 && tp.Mappings[i].TargetPaths[0].String() == "X" {
 			xMapping = &tp.Mappings[i]
@@ -224,6 +226,7 @@ func TestResolverPriority(t *testing.T) {
 
 	// Y should be ignored
 	var yMapping *ResolvedFieldMapping
+
 	for i := range tp.Mappings {
 		if len(tp.Mappings[i].TargetPaths) > 0 && tp.Mappings[i].TargetPaths[0].String() == "Y" {
 			yMapping = &tp.Mappings[i]
@@ -274,8 +277,8 @@ func TestResolverIgnore(t *testing.T) {
 	}
 
 	resolver := NewResolver(graph, mf, DefaultConfig())
-	plan, err := resolver.Resolve()
 
+	plan, err := resolver.Resolve()
 	if err != nil {
 		t.Fatalf("Resolve failed: %v", err)
 	}
@@ -284,6 +287,7 @@ func TestResolverIgnore(t *testing.T) {
 
 	// Find Internal mapping
 	var internalMapping *ResolvedFieldMapping
+
 	for i := range tp.Mappings {
 		if len(tp.Mappings[i].TargetPaths) > 0 && tp.Mappings[i].TargetPaths[0].String() == "Internal" {
 			internalMapping = &tp.Mappings[i]
@@ -344,8 +348,8 @@ func TestResolverDefaultValue(t *testing.T) {
 	}
 
 	resolver := NewResolver(graph, mf, DefaultConfig())
-	plan, err := resolver.Resolve()
 
+	plan, err := resolver.Resolve()
 	if err != nil {
 		t.Fatalf("Resolve failed: %v", err)
 	}
@@ -354,6 +358,7 @@ func TestResolverDefaultValue(t *testing.T) {
 
 	// Find Status mapping
 	var statusMapping *ResolvedFieldMapping
+
 	for i := range tp.Mappings {
 		if len(tp.Mappings[i].TargetPaths) > 0 && tp.Mappings[i].TargetPaths[0].String() == "Status" {
 			statusMapping = &tp.Mappings[i]
@@ -409,8 +414,8 @@ func TestExportSuggestions(t *testing.T) {
 	}
 
 	resolver := NewResolver(graph, mf, DefaultConfig())
-	plan, err := resolver.Resolve()
 
+	plan, err := resolver.Resolve()
 	if err != nil {
 		t.Fatalf("Resolve failed: %v", err)
 	}
@@ -472,8 +477,8 @@ func TestGenerateReport(t *testing.T) {
 	}
 
 	resolver := NewResolver(graph, mf, DefaultConfig())
-	plan, err := resolver.Resolve()
 
+	plan, err := resolver.Resolve()
 	if err != nil {
 		t.Fatalf("Resolve failed: %v", err)
 	}
@@ -566,8 +571,8 @@ func TestResolverNestedStruct(t *testing.T) {
 	}
 
 	resolver := NewResolver(graph, mf, DefaultConfig())
-	plan, err := resolver.Resolve()
 
+	plan, err := resolver.Resolve()
 	if err != nil {
 		t.Fatalf("Resolve failed: %v", err)
 	}
@@ -585,6 +590,7 @@ func TestResolverNestedStruct(t *testing.T) {
 
 	// Find the nested conversion
 	var nestedConv *NestedConversion
+
 	for i := range tp.NestedPairs {
 		if tp.NestedPairs[i].SourceType.ID.Name == "Address" {
 			nestedConv = &tp.NestedPairs[i]
@@ -688,8 +694,8 @@ func TestResolverSliceOfStructs(t *testing.T) {
 	}
 
 	resolver := NewResolver(graph, mf, DefaultConfig())
-	plan, err := resolver.Resolve()
 
+	plan, err := resolver.Resolve()
 	if err != nil {
 		t.Fatalf("Resolve failed: %v", err)
 	}
@@ -702,6 +708,7 @@ func TestResolverSliceOfStructs(t *testing.T) {
 
 	// Find the Items mapping
 	var itemsMapping *ResolvedFieldMapping
+
 	for i := range tp.Mappings {
 		if len(tp.Mappings[i].TargetPaths) > 0 && tp.Mappings[i].TargetPaths[0].String() == "Items" {
 			itemsMapping = &tp.Mappings[i]
@@ -725,6 +732,7 @@ func TestResolverSliceOfStructs(t *testing.T) {
 
 	// Find the nested conversion for slice elements
 	var nestedConv *NestedConversion
+
 	for i := range tp.NestedPairs {
 		if tp.NestedPairs[i].SourceType.ID.Name == "Item" {
 			nestedConv = &tp.NestedPairs[i]
@@ -829,8 +837,8 @@ func TestResolverDeepNesting(t *testing.T) {
 	}
 
 	resolver := NewResolver(graph, mf, DefaultConfig())
-	plan, err := resolver.Resolve()
 
+	plan, err := resolver.Resolve()
 	if err != nil {
 		t.Fatalf("Resolve failed: %v", err)
 	}
@@ -844,6 +852,7 @@ func TestResolverDeepNesting(t *testing.T) {
 
 	// Find B->B nested conversion and verify it has its own nested C->C
 	var nestedB *NestedConversion
+
 	for i := range tp.NestedPairs {
 		if tp.NestedPairs[i].SourceType.ID.Name == "B" {
 			nestedB = &tp.NestedPairs[i]
@@ -867,6 +876,7 @@ func TestResolverDeepNesting(t *testing.T) {
 		if nestedC.SourceType.ID.Name != "C" {
 			t.Errorf("Expected nested C type, got %s", nestedC.SourceType.ID.Name)
 		}
+
 		if nestedC.ResolvedPair == nil {
 			t.Error("Expected C->C to be recursively resolved")
 		}
@@ -918,8 +928,8 @@ func TestResolverMaxRecursionDepth(t *testing.T) {
 	config.MaxRecursionDepth = 3 // Limit recursion
 
 	resolver := NewResolver(graph, mf, config)
-	plan, err := resolver.Resolve()
 
+	plan, err := resolver.Resolve()
 	if err != nil {
 		t.Fatalf("Resolve failed: %v", err)
 	}
@@ -931,6 +941,7 @@ func TestResolverMaxRecursionDepth(t *testing.T) {
 
 	// Should have warnings about max recursion depth
 	hasRecursionWarning := false
+
 	for _, w := range plan.Diagnostics.Warnings {
 		if w.Code == "max_recursion_depth" {
 			hasRecursionWarning = true

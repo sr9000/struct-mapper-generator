@@ -148,19 +148,23 @@ func TestNormalizedLevenshteinScoreWithSuffixStrip(t *testing.T) {
 	}
 }
 
-// Benchmark tests
+// Benchmark tests.
 func BenchmarkLevenshtein(b *testing.B) {
 	a := "algorithm"
+
 	bStr := "altruistic"
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		Levenshtein(a, bStr)
 	}
 }
 
 func BenchmarkNormalizedLevenshteinScore(b *testing.B) {
 	a := "CustomerOrderID"
+
 	bStr := "customer_order_id"
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		NormalizedLevenshteinScore(a, bStr)
 	}
 }

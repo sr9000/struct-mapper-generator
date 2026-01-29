@@ -303,7 +303,7 @@ func TestMarshal(t *testing.T) {
 	parsed, err := Parse(data)
 	require.NoError(t, err)
 	assert.Equal(t, mf.Version, parsed.Version)
-	assert.Equal(t, len(mf.TypeMappings), len(parsed.TypeMappings))
+	assert.Len(t, parsed.TypeMappings, len(mf.TypeMappings))
 }
 
 func TestMarshalStringOrArray(t *testing.T) {
@@ -339,12 +339,14 @@ func TestNormalizeTypeMapping(t *testing.T) {
 	assert.Len(t, tm.Fields, 3) // 2 from 121 + 1 existing
 	// Original field should still be there
 	found := false
+
 	for _, f := range tm.Fields {
 		if f.Target.First() == "Existing" {
 			found = true
 			break
 		}
 	}
+
 	assert.True(t, found, "existing field should be preserved")
 }
 
@@ -396,7 +398,7 @@ func TestStringOrArrayMethods(t *testing.T) {
 	assert.True(t, empty.IsEmpty())
 	assert.False(t, empty.IsSingle())
 	assert.False(t, empty.IsMultiple())
-	assert.Equal(t, "", empty.First())
+	assert.Empty(t, empty.First())
 
 	single := StringOrArray{"one"}
 	assert.False(t, single.IsEmpty())
@@ -514,7 +516,8 @@ func TestFieldRefArrayMarshal(t *testing.T) {
 	}
 	data, err = multi.MarshalYAML()
 	require.NoError(t, err)
-	expected := []interface{}{
+
+	expected := []any{
 		map[string]string{"DisplayName": "dive"},
 		"FullName",
 	}
@@ -526,7 +529,7 @@ func TestFieldRefArrayMethods(t *testing.T) {
 	assert.True(t, empty.IsEmpty())
 	assert.False(t, empty.IsSingle())
 	assert.False(t, empty.IsMultiple())
-	assert.Equal(t, "", empty.First())
+	assert.Empty(t, empty.First())
 	assert.False(t, empty.HasAnyHint())
 
 	single := FieldRefArray{{Path: "Name"}}

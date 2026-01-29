@@ -4,9 +4,9 @@ import (
 	"time"
 )
 
-// Address represents a physical or billing/shipping address
+// Address represents a physical or billing/shipping address.
 type Address struct {
-	ID         uint      `json:"id" gorm:"primaryKey"`
+	ID         uint      `gorm:"primaryKey"  json:"id"`
 	Street     string    `json:"street"`
 	City       string    `json:"city"`
 	State      string    `json:"state"`
@@ -17,12 +17,12 @@ type Address struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
-// Customer represents a store customer/user
+// Customer represents a store customer/user.
 type Customer struct {
-	ID                       uint       `json:"id" gorm:"primaryKey"`
+	ID                       uint       `gorm:"primaryKey"                            json:"id"`
 	FirstName                string     `json:"first_name"`
 	LastName                 string     `json:"last_name"`
-	Email                    string     `json:"email" gorm:"uniqueIndex"`
+	Email                    string     `gorm:"uniqueIndex"                           json:"email"`
 	Phone                    string     `json:"phone"`
 	PasswordHash             string     `json:"-"` // omitted in JSON
 	DateOfBirth              *time.Time `json:"date_of_birth,omitempty"`
@@ -30,17 +30,17 @@ type Customer struct {
 	DefaultShippingAddressID *uint      `json:"default_shipping_address_id,omitempty"`
 
 	// Relationships
-	Addresses []Address `json:"addresses,omitempty" gorm:"foreignKey:CustomerID"`
-	Orders    []Order   `json:"orders,omitempty" gorm:"foreignKey:CustomerID"`
+	Addresses []Address `gorm:"foreignKey:CustomerID" json:"addresses,omitempty"`
+	Orders    []Order   `gorm:"foreignKey:CustomerID" json:"orders,omitempty"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// Product represents a sellable item in the store
+// Product represents a sellable item in the store.
 type Product struct {
-	ID          uint    `json:"id" gorm:"primaryKey"`
-	SKU         string  `json:"sku" gorm:"uniqueIndex"`
+	ID          uint    `gorm:"primaryKey"  json:"id"`
+	SKU         string  `gorm:"uniqueIndex" json:"sku"`
 	Name        string  `json:"name"`
 	Description string  `json:"description"`
 	Price       int64   `json:"price"` // in cents (minor currency unit)
@@ -49,31 +49,31 @@ type Product struct {
 	Weight      float64 `json:"weight"` // in grams, useful for shipping
 
 	// Relationships
-	OrderItems []OrderItem `json:"-" gorm:"foreignKey:ProductID"`
+	OrderItems []OrderItem `gorm:"foreignKey:ProductID" json:"-"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// Order represents a customer's purchase
+// Order represents a customer's purchase.
 type Order struct {
-	ID          uint   `json:"id" gorm:"primaryKey"`
+	ID          uint   `gorm:"primaryKey"    json:"id"`
 	CustomerID  uint   `json:"customer_id"`
-	OrderNumber string `json:"order_number" gorm:"uniqueIndex"`
+	OrderNumber string `gorm:"uniqueIndex"   json:"order_number"`
 	Status      string `json:"status"`       // e.g. "pending", "paid", "shipped", "cancelled"
 	TotalAmount int64  `json:"total_amount"` // in cents
-	Currency    string `json:"currency" gorm:"default:'USD'"`
+	Currency    string `gorm:"default:'USD'" json:"currency"`
 
 	ShippingAddressID uint `json:"shipping_address_id"`
 	BillingAddressID  uint `json:"billing_address_id"`
 
 	// Embedded addresses for snapshot (common denormalization practice)
-	ShippingAddress Address `json:"shipping_address" gorm:"embedded;embeddedPrefix:shipping_"`
-	BillingAddress  Address `json:"billing_address" gorm:"embedded;embeddedPrefix:billing_"`
+	ShippingAddress Address `gorm:"embedded;embeddedPrefix:shipping_" json:"shipping_address"`
+	BillingAddress  Address `gorm:"embedded;embeddedPrefix:billing_"  json:"billing_address"`
 
 	// Relationships
-	Customer Customer    `json:"customer,omitempty" gorm:"foreignKey:CustomerID"`
-	Items    []OrderItem `json:"items" gorm:"foreignKey:OrderID"`
+	Customer Customer    `gorm:"foreignKey:CustomerID" json:"customer,omitempty"`
+	Items    []OrderItem `gorm:"foreignKey:OrderID"    json:"items"`
 
 	PlacedAt    *time.Time `json:"placed_at,omitempty"`
 	ShippedAt   *time.Time `json:"shipped_at,omitempty"`
@@ -82,9 +82,9 @@ type Order struct {
 	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
-// OrderItem is a line item within an order
+// OrderItem is a line item within an order.
 type OrderItem struct {
-	ID         uint  `json:"id" gorm:"primaryKey"`
+	ID         uint  `gorm:"primaryKey"  json:"id"`
 	OrderID    uint  `json:"order_id"`
 	ProductID  uint  `json:"product_id"`
 	Quantity   int   `json:"quantity"`
@@ -92,8 +92,8 @@ type OrderItem struct {
 	TotalPrice int64 `json:"total_price"` // UnitPrice * Quantity
 
 	// Relationships
-	Order   Order   `json:"-" gorm:"foreignKey:OrderID"`
-	Product Product `json:"product" gorm:"foreignKey:ProductID"`
+	Order   Order   `gorm:"foreignKey:OrderID"   json:"-"`
+	Product Product `gorm:"foreignKey:ProductID" json:"product"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`

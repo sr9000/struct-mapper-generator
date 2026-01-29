@@ -1,5 +1,7 @@
 package mapping
 
+import "strings"
+
 // MappingFile represents the root of a YAML mapping definition file.
 // This is the authoritative, human-reviewed mapping configuration.
 type MappingFile struct {
@@ -88,6 +90,7 @@ func (f FieldRefArray) Paths() []string {
 	for i, ref := range f {
 		result[i] = ref.Path
 	}
+
 	return result
 }
 
@@ -96,6 +99,7 @@ func (f FieldRefArray) First() string {
 	if len(f) == 0 {
 		return ""
 	}
+
 	return f[0].Path
 }
 
@@ -104,6 +108,7 @@ func (f FieldRefArray) FirstRef() FieldRef {
 	if len(f) == 0 {
 		return FieldRef{}
 	}
+
 	return f[0]
 }
 
@@ -129,6 +134,7 @@ func (f FieldRefArray) HasAnyHint() bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -136,14 +142,17 @@ func (f FieldRefArray) HasAnyHint() bool {
 func (f FieldRefArray) HasConflictingHints() bool {
 	hasDive := false
 	hasFinal := false
+
 	for _, ref := range f {
 		if ref.Hint == HintDive {
 			hasDive = true
 		}
+
 		if ref.Hint == HintFinal {
 			hasFinal = true
 		}
 	}
+
 	return hasDive && hasFinal
 }
 
@@ -156,14 +165,17 @@ func (sources FieldRefArray) GetEffectiveHint(targets FieldRefArray) Introspecti
 	allRefs := append(append([]FieldRef{}, sources...), targets...)
 	hasDive := false
 	hasFinal := false
+
 	for _, ref := range allRefs {
 		if ref.Hint == HintDive {
 			hasDive = true
 		}
+
 		if ref.Hint == HintFinal {
 			hasFinal = true
 		}
 	}
+
 	if hasDive && hasFinal {
 		// Conflicting hints - treat as final (no introspection)
 		return HintFinal
@@ -183,6 +195,7 @@ func (sources FieldRefArray) GetEffectiveHint(targets FieldRefArray) Introspecti
 				return t.Hint
 			}
 		}
+
 		return HintNone
 	}
 
@@ -197,6 +210,7 @@ func (sources FieldRefArray) GetEffectiveHint(targets FieldRefArray) Introspecti
 				return s.Hint
 			}
 		}
+
 		return HintNone
 	}
 
@@ -205,9 +219,11 @@ func (sources FieldRefArray) GetEffectiveHint(targets FieldRefArray) Introspecti
 		if srcCount == 1 && sources[0].Hint != HintNone {
 			return sources[0].Hint
 		}
+
 		if tgtCount == 1 && targets[0].Hint != HintNone {
 			return targets[0].Hint
 		}
+
 		return HintNone
 	}
 
@@ -215,9 +231,11 @@ func (sources FieldRefArray) GetEffectiveHint(targets FieldRefArray) Introspecti
 	if hasDive {
 		return HintDive
 	}
+
 	if hasFinal {
 		return HintFinal
 	}
+
 	return HintFinal // Default to final for N:M
 }
 
@@ -298,9 +316,11 @@ func (fm *FieldMapping) GetCardinality() Cardinality {
 	if sourceCount <= 1 && targetCount <= 1 {
 		return CardinalityOneToOne
 	}
+
 	if sourceCount <= 1 && targetCount > 1 {
 		return CardinalityOneToMany
 	}
+
 	if sourceCount > 1 && targetCount <= 1 {
 		return CardinalityManyToOne
 	}
@@ -393,16 +413,21 @@ type FieldPath struct {
 func (p FieldPath) String() string {
 	var result string
 
+	var resultSb396 strings.Builder
+
 	for i, seg := range p.Segments {
 		if i > 0 {
-			result += "."
+			resultSb396.WriteString(".")
 		}
 
-		result += seg.Name
+		resultSb396.WriteString(seg.Name)
+
 		if seg.IsSlice {
-			result += "[]"
+			resultSb396.WriteString("[]")
 		}
 	}
+
+	result += resultSb396.String()
 
 	return result
 }

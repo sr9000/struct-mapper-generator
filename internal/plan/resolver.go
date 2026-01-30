@@ -111,8 +111,9 @@ func (r *Resolver) Resolve() (*ResolvedMappingPlan, error) {
 	return plan, nil
 }
 
-// resolveTypePairRecursive resolves a nested type pair without explicit YAML mapping.
-// This is used for recursive resolution of nested struct and slice element types.
+// resolveTypePairRecursive resolves a nested type pair.
+// It first checks if there's an explicit YAML mapping for this type pair,
+// and falls back to auto-matching if not.
 func (r *Resolver) resolveTypePairRecursive(
 	sourceType, targetType *analyze.TypeInfo,
 	diags *Diagnostics,
@@ -127,6 +128,21 @@ func (r *Resolver) resolveTypePairRecursive(
 	// Check cache first
 	if cached, exists := r.resolvedPairs[typePairKey]; exists {
 		return cached, nil
+	}
+
+	// Check if there's an explicit YAML mapping for this nested type pair
+	if r.mappingDef != nil {
+		for i := range r.mappingDef.TypeMappings {
+			tm := &r.mappingDef.TypeMappings[i]
+			yamlSource := mapping.ResolveTypeID(tm.Source, r.graph)
+			yamlTarget := mapping.ResolveTypeID(tm.Target, r.graph)
+
+			if yamlSource != nil && yamlTarget != nil &&
+				yamlSource.ID == sourceType.ID && yamlTarget.ID == targetType.ID {
+				// Found an explicit YAML mapping - use resolveTypeMapping
+				return r.resolveTypeMapping(tm, diags)
+			}
+		}
 	}
 
 	result := &ResolvedTypePair{
@@ -172,6 +188,11 @@ func (r *Resolver) resolveTypeMapping(
 
 	typePairStr := fmt.Sprintf("%s->%s", sourceType.ID, targetType.ID)
 
+	// Check cache first to prevent infinite recursion
+	if cached, exists := r.resolvedPairs[typePairStr]; exists {
+		return cached, nil
+	}
+
 	result := &ResolvedTypePair{
 		SourceType:      sourceType,
 		TargetType:      targetType,
@@ -179,6 +200,9 @@ func (r *Resolver) resolveTypeMapping(
 		UnmappedTargets: []UnmappedField{},
 		NestedPairs:     []NestedConversion{},
 	}
+
+	// Pre-cache to prevent infinite recursion for cyclic types
+	r.resolvedPairs[typePairStr] = result
 
 	// Track which target fields have been mapped
 	mappedTargets := make(map[string]bool)

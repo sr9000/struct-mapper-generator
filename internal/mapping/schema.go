@@ -256,14 +256,14 @@ func (f FieldRefArray) GetEffectiveHint(targets FieldRefArray) IntrospectionHint
 //   - 1:1 - possibly introspects if both are structs (unless hint says final)
 //   - N:M - treated as final unless explicit dive hint
 type FieldMapping struct {
-	// Target is the target field path(s) with optional hints.
-	// Examples: "Name", ["FirstName", "DisplayName"], {Address: dive}
-	Target FieldRefArray `yaml:"target"`
-
 	// Source is the source field path(s) with optional hints.
 	// Examples: "Name", ["FirstName", "LastName"], {Addr: dive}
 	// If empty, the field is set from Default or via Transform.
 	Source FieldRefArray `yaml:"source,omitempty"`
+
+	// Target is the target field path(s) with optional hints.
+	// Examples: "Name", ["FirstName", "DisplayName"], {Address: dive}
+	Target FieldRefArray `yaml:"target"`
 
 	// Default is a literal value to assign if Source is empty.
 	// Supports basic types: strings (quoted), numbers, booleans.

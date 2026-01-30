@@ -256,3 +256,46 @@ func (d *Diagnostics) Merge(other *Diagnostics) {
 	d.Errors = append(d.Errors, other.Errors...)
 	d.Warnings = append(d.Warnings, other.Warnings...)
 }
+
+// IncompleteMappingInfo describes a mapping that requires a transform but doesn't have one.
+type IncompleteMappingInfo struct {
+	TypePair    string
+	SourcePath  string
+	TargetPath  string
+	Source      MappingSource
+	Explanation string
+}
+
+// FindIncompleteMappings returns all mappings that have StrategyTransform but no Transform function defined.
+// These mappings cannot be generated and need user intervention.
+func (p *ResolvedMappingPlan) FindIncompleteMappings() []IncompleteMappingInfo {
+	var incomplete []IncompleteMappingInfo
+
+	for _, tp := range p.TypePairs {
+		typePairStr := tp.SourceType.ID.String() + "->" + tp.TargetType.ID.String()
+
+		for _, m := range tp.Mappings {
+			if m.Strategy == StrategyTransform && m.Transform == "" {
+				info := IncompleteMappingInfo{
+					TypePair:    typePairStr,
+					Explanation: m.Explanation,
+					Source:      m.Source,
+				}
+				if len(m.SourcePaths) > 0 {
+					info.SourcePath = m.SourcePaths[0].String()
+				}
+				if len(m.TargetPaths) > 0 {
+					info.TargetPath = m.TargetPaths[0].String()
+				}
+				incomplete = append(incomplete, info)
+			}
+		}
+	}
+
+	return incomplete
+}
+
+// HasIncompleteMappings returns true if there are any mappings that need transforms but don't have them.
+func (p *ResolvedMappingPlan) HasIncompleteMappings() bool {
+	return len(p.FindIncompleteMappings()) > 0
+}

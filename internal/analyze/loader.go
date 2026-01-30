@@ -126,6 +126,7 @@ func (a *Analyzer) analyzeType(t types.Type) *TypeInfo {
 
 	case *types.Basic:
 		info.Kind = TypeKindBasic
+		info.ID.Name = tt.Name() // Set the basic type name (e.g., "int64", "string")
 
 	case *types.Pointer:
 		info.Kind = TypeKindPointer

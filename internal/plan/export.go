@@ -18,12 +18,34 @@ func ExportSuggestions(plan *ResolvedMappingPlan) (*mapping.MappingFile, error) 
 		Transforms:   []mapping.TransformDef{},
 	}
 
+	// Track already exported type pairs to avoid duplicates
+	exported := make(map[string]bool)
+
 	for _, tp := range plan.TypePairs {
-		tm := exportTypePairSuggestions(&tp)
-		mf.TypeMappings = append(mf.TypeMappings, tm)
+		exportTypePairWithNested(&tp, mf, exported)
 	}
 
 	return mf, nil
+}
+
+// exportTypePairWithNested exports a type pair and recursively exports its nested pairs.
+func exportTypePairWithNested(tp *ResolvedTypePair, mf *mapping.MappingFile, exported map[string]bool) {
+	key := tp.SourceType.ID.String() + "->" + tp.TargetType.ID.String()
+	if exported[key] {
+		return
+	}
+
+	exported[key] = true
+
+	tm := exportTypePairSuggestions(tp)
+	mf.TypeMappings = append(mf.TypeMappings, tm)
+
+	// Recursively export nested pairs
+	for _, np := range tp.NestedPairs {
+		if np.ResolvedPair != nil {
+			exportTypePairWithNested(np.ResolvedPair, mf, exported)
+		}
+	}
 }
 
 // ExportSuggestionsYAML generates suggested YAML as a byte slice.
@@ -50,14 +72,26 @@ func exportTypePairSuggestions(tp *ResolvedTypePair) mapping.TypeMapping {
 	for _, m := range tp.Mappings {
 		switch m.Source {
 		case MappingSourceYAML121:
-			// Preserve as 121 mappings
-			if len(m.SourcePaths) == 1 && len(m.TargetPaths) == 1 {
-				tm.OneToOne[m.SourcePaths[0].String()] = m.TargetPaths[0].String()
+			// Check if this 121 mapping has incompatible types (needs transform)
+			if m.Strategy == StrategyTransform && m.Transform == "" {
+				// Move to fields section with a placeholder transform
+				fm := exportFieldMapping(&m)
+				fm.Transform = generatePlaceholderTransformName(m.SourcePaths, m.TargetPaths)
+				tm.Fields = append(tm.Fields, fm)
+			} else {
+				// Preserve as 121 mappings
+				if len(m.SourcePaths) == 1 && len(m.TargetPaths) == 1 {
+					tm.OneToOne[m.SourcePaths[0].String()] = m.TargetPaths[0].String()
+				}
 			}
 
 		case MappingSourceYAMLFields:
 			// Preserve explicit fields
 			fm := exportFieldMapping(&m)
+			// If this field mapping needs a transform but doesn't have one, add a placeholder
+			if m.Strategy == StrategyTransform && m.Transform == "" && fm.Transform == "" {
+				fm.Transform = generatePlaceholderTransformName(m.SourcePaths, m.TargetPaths)
+			}
 			tm.Fields = append(tm.Fields, fm)
 
 		case MappingSourceYAMLIgnore, MappingSourceYAMLAuto:
@@ -88,27 +122,26 @@ func exportTypePairSuggestions(tp *ResolvedTypePair) mapping.TypeMapping {
 	return tm
 }
 
+// generatePlaceholderTransformName creates a placeholder transform function name
+// based on the source and target field names.
+func generatePlaceholderTransformName(sourcePaths []mapping.FieldPath, targetPaths []mapping.FieldPath) string {
+	sourceName := "Source"
+	targetName := "Target"
+
+	if len(sourcePaths) > 0 {
+		sourceName = sourcePaths[0].String()
+	}
+	if len(targetPaths) > 0 {
+		targetName = targetPaths[0].String()
+	}
+
+	// Create a descriptive placeholder name
+	return fmt.Sprintf("TODO_%sTo%s", sourceName, targetName)
+}
+
 // exportFieldMapping converts a ResolvedFieldMapping to a mapping.FieldMapping.
 func exportFieldMapping(m *ResolvedFieldMapping) mapping.FieldMapping {
 	fm := mapping.FieldMapping{}
-
-	// Set targets with hints
-	targets := make(mapping.FieldRefArray, len(m.TargetPaths))
-
-	for i, tp := range m.TargetPaths {
-		hint := mapping.HintNone
-		// Apply effective hint to the first target (following cardinality rules)
-		if i == 0 && m.EffectiveHint != mapping.HintNone {
-			// For N:1, hint goes on target; for others, we'll put it on first item
-			if m.Cardinality == mapping.CardinalityManyToOne || m.Cardinality == mapping.CardinalityOneToOne {
-				hint = m.EffectiveHint
-			}
-		}
-
-		targets[i] = mapping.FieldRef{Path: tp.String(), Hint: hint}
-	}
-
-	fm.Target = targets
 
 	// Set sources with hints
 	if len(m.SourcePaths) > 0 {
@@ -128,6 +161,24 @@ func exportFieldMapping(m *ResolvedFieldMapping) mapping.FieldMapping {
 
 		fm.Source = sources
 	}
+
+	// Set targets with hints
+	targets := make(mapping.FieldRefArray, len(m.TargetPaths))
+
+	for i, tp := range m.TargetPaths {
+		hint := mapping.HintNone
+		// Apply effective hint to the first target (following cardinality rules)
+		if i == 0 && m.EffectiveHint != mapping.HintNone {
+			// For N:1, hint goes on target; for others, we'll put it on first item
+			if m.Cardinality == mapping.CardinalityManyToOne || m.Cardinality == mapping.CardinalityOneToOne {
+				hint = m.EffectiveHint
+			}
+		}
+
+		targets[i] = mapping.FieldRef{Path: tp.String(), Hint: hint}
+	}
+
+	fm.Target = targets
 
 	// Set default
 	if m.Default != nil {

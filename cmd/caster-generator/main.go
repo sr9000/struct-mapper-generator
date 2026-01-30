@@ -188,18 +188,13 @@ Options:
 	var packages StringSliceFlag
 
 	fs.Var(&packages, "pkg", "Package path to analyze (auto-detected from type names if not specified)")
-	fromType := fs.String("from", "", "Source type (e.g., store.Order) - required")
-	toType := fs.String("to", "", "Target type (e.g., warehouse.Order) - required")
+	mappingFile := fs.String("mapping", "", "Path to existing YAML mapping file to improve")
+	fromType := fs.String("from", "", "Source type (e.g., store.Order) - required if no mapping file")
+	toType := fs.String("to", "", "Target type (e.g., warehouse.Order) - required if no mapping file")
 	outFile := fs.String("out", "", "Output YAML file (default: stdout)")
 	minConfidence := fs.Float64("min-confidence", 0.7, "Minimum confidence for auto-matching (0.0-1.0)")
 
 	if err := fs.Parse(args); err != nil {
-		os.Exit(1)
-	}
-
-	if *fromType == "" || *toType == "" {
-		fmt.Fprintln(os.Stderr, "Error: -from and -to flags are required")
-		fs.Usage()
 		os.Exit(1)
 	}
 
@@ -217,6 +212,59 @@ Options:
 		}
 	}
 
+	// Try to load existing mapping file
+	var mappingDef *mapping.MappingFile
+
+	// First try -mapping flag
+	if *mappingFile != "" {
+		if existingDef, err := mapping.LoadFile(*mappingFile); err == nil {
+			mappingDef = existingDef
+
+			fmt.Printf("Loaded existing mapping from %s\n", *mappingFile)
+
+			// Auto-detect packages from existing mapping if not specified
+			if len(packages) == 0 {
+				packages = extractPackagesFromMapping(mappingDef)
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "Error loading mapping file: %v\n", err)
+			os.Exit(1)
+		}
+	} else if *outFile != "" {
+		// Then try -out file if it exists
+		if existingDef, err := mapping.LoadFile(*outFile); err == nil {
+			mappingDef = existingDef
+
+			fmt.Printf("Loaded existing mapping from %s\n", *outFile)
+
+			// Auto-detect packages from existing mapping if not specified
+			if len(packages) == 0 {
+				packages = extractPackagesFromMapping(mappingDef)
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "Note: could not load existing mapping from %s: %v\n", *outFile, err)
+		}
+	}
+
+	// If no existing mapping, create a minimal one
+	if mappingDef == nil {
+		if *fromType == "" || *toType == "" {
+			fmt.Fprintln(os.Stderr, "Error: -from and -to flags are required when no existing mapping file")
+			fs.Usage()
+			os.Exit(1)
+		}
+
+		mappingDef = &mapping.MappingFile{
+			Version: "1",
+			TypeMappings: []mapping.TypeMapping{
+				{
+					Source: *fromType,
+					Target: *toType,
+				},
+			},
+		}
+	}
+
 	if len(packages) == 0 {
 		fmt.Fprintln(os.Stderr, "Error: cannot auto-detect packages. "+
 			"Use qualified type names (e.g., store.Order) or specify -pkg flags")
@@ -231,17 +279,6 @@ Options:
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading packages: %v\n", err)
 		os.Exit(1)
-	}
-
-	// Create a minimal mapping file for the resolver
-	mappingDef := &mapping.MappingFile{
-		Version: "1",
-		TypeMappings: []mapping.TypeMapping{
-			{
-				Source: *fromType,
-				Target: *toType,
-			},
-		},
 	}
 
 	// Run resolution with auto-matching
@@ -277,6 +314,17 @@ Options:
 
 	// Print diagnostics summary
 	printDiagnostics(&resolvedPlan.Diagnostics)
+
+	// Warn about incomplete mappings that were fixed with placeholders
+	incompleteMappings := resolvedPlan.FindIncompleteMappings()
+	if len(incompleteMappings) > 0 {
+		fmt.Fprintln(os.Stderr, "\nNote: The following mappings have incompatible types and were moved to 'fields' with placeholder transforms:")
+		for _, im := range incompleteMappings {
+			fmt.Fprintf(os.Stderr, "  - %s -> %s (in %s)\n", im.SourcePath, im.TargetPath, im.TypePair)
+			fmt.Fprintf(os.Stderr, "    reason: %s\n", im.Explanation)
+		}
+		fmt.Fprintln(os.Stderr, "\nPlease implement the TODO_* transform functions or rename them to your actual function names.")
+	}
 }
 
 // runGen implements the 'gen' command.
@@ -362,6 +410,23 @@ Options:
 
 	// Print diagnostics
 	printDiagnostics(&resolvedPlan.Diagnostics)
+
+	// Check for incomplete mappings (types that need transforms but don't have them)
+	incompleteMappings := resolvedPlan.FindIncompleteMappings()
+	if len(incompleteMappings) > 0 {
+		fmt.Fprintln(os.Stderr, "\nError: Found mappings with incompatible types that require custom transform functions:")
+		for _, im := range incompleteMappings {
+			fmt.Fprintf(os.Stderr, "  - %s -> %s (in %s)\n", im.SourcePath, im.TargetPath, im.TypePair)
+			fmt.Fprintf(os.Stderr, "    reason: %s\n", im.Explanation)
+			fmt.Fprintf(os.Stderr, "    source: %s\n", im.Source)
+		}
+		fmt.Fprintln(os.Stderr, "\nTo fix this:")
+		fmt.Fprintln(os.Stderr, "  1. Move these mappings from '121' to 'fields' section in your YAML")
+		fmt.Fprintln(os.Stderr, "  2. Add a 'transform' function name for each")
+		fmt.Fprintln(os.Stderr, "  3. Implement the transform functions in your code")
+		fmt.Fprintln(os.Stderr, "\nOr run 'suggest' command to auto-generate updated YAML with placeholders.")
+		os.Exit(1)
+	}
 
 	// Write suggestions if requested
 	if *writeSuggestions != "" {

@@ -234,7 +234,7 @@ mappings:
 	assert.True(t, result.IsValid(), "errors: %v", result.Errors)
 }
 
-func TestValidate_MissingTransform(t *testing.T) {
+func TestValidate_AllowMissingTransform(t *testing.T) {
 	yaml := `
 mappings:
   - source: store.Order
@@ -250,8 +250,7 @@ mappings:
 	graph := buildTestTypeGraph()
 	result := Validate(mf, graph)
 
-	assert.False(t, result.IsValid())
-	assert.Contains(t, result.Error().Error(), "NonExistentTransform")
+	assert.True(t, result.IsValid())
 }
 
 func TestValidate_DuplicateTransform(t *testing.T) {

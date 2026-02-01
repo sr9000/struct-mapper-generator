@@ -246,13 +246,6 @@ func validateFieldMapping(
 		result.AddError(basePath, fmt.Sprintf(
 			"%s mapping requires a transform function", card))
 	}
-
-	// Validate transform reference
-	if fm.Transform != "" {
-		if _, exists := transforms[fm.Transform]; !exists {
-			result.AddError(basePath+".transform", fmt.Sprintf("transform %q not defined", fm.Transform))
-		}
-	}
 }
 
 // validateFieldPath validates that a field path exists in the given type.

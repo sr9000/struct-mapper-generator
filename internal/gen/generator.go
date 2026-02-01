@@ -120,6 +120,12 @@ type templateData struct {
 	GenerateComments  bool
 	NestedCasters     []nestedCasterRef
 	MissingTransforms []MissingTransform
+	ExtraArgs         []extraArg
+}
+
+type extraArg struct {
+	Name string
+	Type string
 }
 
 // importSpec represents an import statement.
@@ -207,6 +213,16 @@ func (g *Generator) buildTemplateData(pair *plan.ResolvedTypePair) *templateData
 			Package: tgtPkgAlias,
 			Name:    pair.TargetType.ID.Name,
 		},
+	}
+
+	// Add Requires as extra args
+	if len(pair.Requires) > 0 {
+		for _, req := range pair.Requires {
+			data.ExtraArgs = append(data.ExtraArgs, extraArg{
+				Name: req.Name,
+				Type: req.Type,
+			})
+		}
 	}
 
 	// Collect imports
@@ -555,22 +571,18 @@ func (g *Generator) identifyMissingTransforms(pair *plan.ResolvedTypePair, impor
 
 			// Also add 'extra' types if any
 			for _, exp := range m.Extra {
-				typ := g.getFieldTypeString(pair.SourceType, exp, imports)
+				var typ string
+				if exp.Def.Source != "" {
+					typ = g.getFieldTypeString(pair.SourceType, exp.Def.Source, imports)
+				} else if exp.Def.Target != "" {
+					// Reference to target type field?
+					typ = g.getFieldTypeString(pair.TargetType, exp.Def.Target, imports)
+				} else {
+					// Fallback
+					typ = "interface{}"
+				}
 				argTypes = append(argTypes, typ)
 			}
-
-			// Add 'requires' types from the mapping if they correspond to known type patterns?
-			// The `requires` field on TypeMapping lists free variables.
-			// We don't have type info for them in the graph usually, unless we resolve them against something.
-			// Ideally they should be passed as args to the caster.
-			// But here we are generating the transform signature.
-			// Typically transforms use source fields.
-			// If 'requires' are used, they are usually passed to the main caster function,
-			// and then passed down to transforms.
-			// But our main caster function signature only takes (in SourceType).
-			// If we support `Requires`, we should update the main function signature too.
-			// This is a bigger change. User asked for "requires: and complement extra:".
-			// For now, let's stick to what we know: source fields and extra source fields.
 
 			// Determine return type
 			returnType := "interface{}"
@@ -824,7 +836,7 @@ import (
 {{end}}
 
 // {{.FunctionName}} converts {{.SourceType}} to {{.TargetType}}.
-func {{.FunctionName}}(in {{.SourceType}}) {{.TargetType}} {
+func {{.FunctionName}}(in {{.SourceType}}{{range .ExtraArgs}}, {{.Name}} {{.Type}}{{end}}) {{.TargetType}} {
 	out := {{.TargetType}}{}
 {{range .Assignments}}
 {{if .Comment}}	// {{.Comment}}

@@ -206,6 +206,15 @@ func (r *Resolver) resolveTypeMapping(
 	// Pre-cache to prevent infinite recursion for cyclic types
 	r.resolvedPairs[typePairStr] = result
 
+	// Check for requires conflicts
+	if conflicts := result.CheckRequireConflicts(); len(conflicts) > 0 {
+		for _, conflict := range conflicts {
+			diags.AddWarning("requires_conflict",
+				fmt.Sprintf("required variable %q conflicts with source field", conflict),
+				typePairStr, "")
+		}
+	}
+
 	// Track which target fields have been mapped
 	mappedTargets := make(map[string]bool)
 
@@ -294,6 +303,15 @@ func (r *Resolver) resolveTypeMapping(
 
 	// Detect nested struct conversions (with recursive resolution)
 	r.detectNestedConversions(result, diags, 0)
+
+	// Check for unused requires
+	if unused := result.UnusedRequires(); len(unused) > 0 {
+		for _, u := range unused {
+			diags.AddWarning("unused_requires",
+				fmt.Sprintf("required variable %q is not used in any mapping", u),
+				typePairStr, "")
+		}
+	}
 
 	// Sort mappings for deterministic output
 	r.sortMappings(result)

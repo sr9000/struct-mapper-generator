@@ -18,6 +18,12 @@ type ResolvedMappingPlan struct {
 	Diagnostics Diagnostics
 }
 
+// ArgDef represents a function argument definition.
+type ArgDef struct {
+	Name string
+	Type string
+}
+
 // ResolvedTypePair represents a fully resolved mapping between two struct types.
 type ResolvedTypePair struct {
 	// Source type being converted from.
@@ -31,7 +37,7 @@ type ResolvedTypePair struct {
 	// NestedPairs tracks nested struct conversions needed.
 	NestedPairs []NestedConversion
 	// Requires lists external variables required by this mapping function.
-	Requires []string
+	Requires []mapping.ArgDef
 }
 
 // ResolvedFieldMapping represents a single resolved field mapping.
@@ -58,7 +64,7 @@ type ResolvedFieldMapping struct {
 	// Controls whether nested fields are recursively resolved or treated as single units.
 	EffectiveHint mapping.IntrospectionHint
 	// Extra lists additional info field paths from the source type.
-	Extra []string
+	Extra []mapping.ExtraVal
 }
 
 // MappingSource indicates where a mapping rule originated.
@@ -302,4 +308,55 @@ func (p *ResolvedMappingPlan) FindIncompleteMappings() []IncompleteMappingInfo {
 // HasIncompleteMappings returns true if there are any mappings that need transforms but don't have them.
 func (p *ResolvedMappingPlan) HasIncompleteMappings() bool {
 	return len(p.FindIncompleteMappings()) > 0
+}
+
+// UnusedRequires returns a list of required arguments that are not used in any mapping.
+func (p *ResolvedTypePair) UnusedRequires() []string {
+	if len(p.Requires) == 0 {
+		return nil
+	}
+
+	used := make(map[string]bool)
+	for _, m := range p.Mappings {
+		// Use struct Name for ExtraVal
+		for _, extra := range m.Extra {
+			used[extra.Name] = true
+		}
+		// Also transforms might use them implicitly?
+		// Currently only Extra tracks usage of these external args as passed to transforms.
+		// If a transform uses a required arg directly without listing it in 'extra',
+		// we wouldn't know unless we parse the transform code (which we don't).
+		// But in the generated code, we would pass 'extra' args to transforms.
+		// Wait, 'Extra' in mapping is currently defined as "lists additional info field paths from the source type".
+		// But the user request implies `requires` (external vars) should also be usable.
+		// If `Extra` lists something that matches a `Requires` name, it's used.
+	}
+
+	var unused []string
+	for _, req := range p.Requires {
+		if !used[req.Name] {
+			// Check if name conflicts with source type fields?
+			// The user asked for "push warning if requires conflicts with source field"
+			unused = append(unused, req.Name)
+		}
+	}
+	return unused
+}
+
+// CheckRequireConflicts checks if any required argument conflicts with a source field name.
+func (p *ResolvedTypePair) CheckRequireConflicts() []string {
+	if p.SourceType == nil || len(p.Requires) == 0 {
+		return nil
+	}
+
+	var conflicts []string
+	for _, req := range p.Requires {
+		for _, field := range p.SourceType.Fields {
+			if field.Name == req.Name {
+				conflicts = append(conflicts, req.Name)
+				break
+			}
+		}
+	}
+	return conflicts
 }

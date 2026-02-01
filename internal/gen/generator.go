@@ -100,18 +100,26 @@ func (g *Generator) generateTypePair(pair *plan.ResolvedTypePair) (*GeneratedFil
 	}, nil
 }
 
+// MissingTransform represents a missing transform function that needs stub generation.
+type MissingTransform struct {
+	Name       string
+	Args       []string
+	ReturnType string
+}
+
 // templateData holds all data needed for the caster template.
 type templateData struct {
-	PackageName      string
-	Filename         string
-	Imports          []importSpec
-	FunctionName     string
-	SourceType       typeRef
-	TargetType       typeRef
-	Assignments      []assignmentData
-	UnmappedTODOs    []string
-	GenerateComments bool
-	NestedCasters    []nestedCasterRef
+	PackageName       string
+	Filename          string
+	Imports           []importSpec
+	FunctionName      string
+	SourceType        typeRef
+	TargetType        typeRef
+	Assignments       []assignmentData
+	UnmappedTODOs     []string
+	GenerateComments  bool
+	NestedCasters     []nestedCasterRef
+	MissingTransforms []MissingTransform
 }
 
 // importSpec represents an import statement.
@@ -224,6 +232,10 @@ func (g *Generator) buildTemplateData(pair *plan.ResolvedTypePair) *templateData
 
 	// Collect nested casters
 	g.collectNestedCasters(data, pair, imports)
+
+	// Identify missing transforms
+	// Pass imports so that type resolution knows about aliases
+	data.MissingTransforms = g.identifyMissingTransforms(pair, imports)
 
 	// Convert imports map to sorted slice
 	for _, imp := range imports {
@@ -518,6 +530,69 @@ func (g *Generator) buildTransformArgs(paths []mapping.FieldPath) string {
 	return strings.Join(args, ", ")
 }
 
+// identifyMissingTransforms finds referenced transforms that are not imported or defined.
+func (g *Generator) identifyMissingTransforms(pair *plan.ResolvedTypePair, imports map[string]importSpec) []MissingTransform {
+	var missing []MissingTransform
+	seen := make(map[string]bool)
+
+	for _, m := range pair.Mappings {
+		if m.Transform == "" {
+			continue
+		}
+
+		// If transform contains a dot, it's likely a package call (or method)
+		if strings.Contains(m.Transform, ".") {
+			continue
+		}
+
+		if !seen[m.Transform] {
+			// Determine argument types
+			var argTypes []string
+			for _, sp := range m.SourcePaths {
+				typ := g.getFieldTypeString(pair.SourceType, sp.String(), imports)
+				argTypes = append(argTypes, typ)
+			}
+
+			// Also add 'extra' types if any
+			for _, exp := range m.Extra {
+				typ := g.getFieldTypeString(pair.SourceType, exp, imports)
+				argTypes = append(argTypes, typ)
+			}
+
+			// Add 'requires' types from the mapping if they correspond to known type patterns?
+			// The `requires` field on TypeMapping lists free variables.
+			// We don't have type info for them in the graph usually, unless we resolve them against something.
+			// Ideally they should be passed as args to the caster.
+			// But here we are generating the transform signature.
+			// Typically transforms use source fields.
+			// If 'requires' are used, they are usually passed to the main caster function,
+			// and then passed down to transforms.
+			// But our main caster function signature only takes (in SourceType).
+			// If we support `Requires`, we should update the main function signature too.
+			// This is a bigger change. User asked for "requires: and complement extra:".
+			// For now, let's stick to what we know: source fields and extra source fields.
+
+			// Determine return type
+			returnType := "interface{}"
+			if len(m.TargetPaths) > 0 {
+				returnType = g.getFieldTypeString(pair.TargetType, m.TargetPaths[0].String(), imports)
+			}
+
+			missing = append(missing, MissingTransform{
+				Name:       m.Transform,
+				Args:       argTypes,
+				ReturnType: returnType,
+			})
+			seen[m.Transform] = true
+		}
+	}
+
+	sort.Slice(missing, func(i, j int) bool {
+		return missing[i].Name < missing[j].Name
+	})
+	return missing
+}
+
 // Helper functions
 
 func (g *Generator) filename(pair *plan.ResolvedTypePair) string {
@@ -764,4 +839,12 @@ func {{.FunctionName}}(in {{.SourceType}}) {{.TargetType}} {
 {{end}}{{end}}
 	return out
 }
+
+{{if .MissingTransforms}}
+// Missing transforms. Ideally, these should be implemented in your project or defined as transforms in map.yaml
+{{range .MissingTransforms}}func {{.Name}}({{range $index, $arg := .Args}}{{if $index}}, {{end}}v{{$index}} {{$arg}}{{end}}) {{.ReturnType}} {
+	panic("transform {{.Name}} not implemented")
+}
+
+{{end}}{{end}}
 `))

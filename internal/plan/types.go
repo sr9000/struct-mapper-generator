@@ -30,6 +30,8 @@ type ResolvedTypePair struct {
 	UnmappedTargets []UnmappedField
 	// NestedPairs tracks nested struct conversions needed.
 	NestedPairs []NestedConversion
+	// Requires lists external variables required by this mapping function.
+	Requires []string
 }
 
 // ResolvedFieldMapping represents a single resolved field mapping.
@@ -46,7 +48,7 @@ type ResolvedFieldMapping struct {
 	Strategy ConversionStrategy
 	// Transform is the name of the transform function (if needed).
 	Transform string
-	// Default value to use if no source (literal string).
+	// Default value to use if source is empty.
 	Default *string
 	// Confidence score for auto-matched mappings (0-1).
 	Confidence float64
@@ -55,6 +57,8 @@ type ResolvedFieldMapping struct {
 	// EffectiveHint is the introspection hint computed for this mapping.
 	// Controls whether nested fields are recursively resolved or treated as single units.
 	EffectiveHint mapping.IntrospectionHint
+	// Extra lists additional info field paths from the source type.
+	Extra []string
 }
 
 // MappingSource indicates where a mapping rule originated.

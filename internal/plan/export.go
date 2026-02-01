@@ -63,11 +63,19 @@ func exportTypePairSuggestions(tp *ResolvedTypePair) mapping.TypeMapping {
 	tm := mapping.TypeMapping{
 		Source:   tp.SourceType.ID.String(),
 		Target:   tp.TargetType.ID.String(),
+		Requires: tp.Requires, // Preserve requires
 		OneToOne: make(map[string]string),
 		Fields:   []mapping.FieldMapping{},
 		Ignore:   []string{},
 		Auto:     []mapping.FieldMapping{},
 	}
+
+	// Restore Requires field from original mapping if available
+	// Note: The current plan model doesn't store the original 'requires' field.
+	// We need to update the plan model or the resolver to pass this through.
+	// For now, if we had access to the original mapping definition, we could copy it.
+
+	// TODO: Pass Requires and Extra fields through ResolvedTypePair/ResolvedFieldMapping
 
 	for _, m := range tp.Mappings {
 		switch m.Source {
@@ -190,6 +198,11 @@ func exportFieldMapping(m *ResolvedFieldMapping) mapping.FieldMapping {
 		fm.Transform = m.Transform
 	}
 
+	// Set extra
+	if len(m.Extra) > 0 {
+		fm.Extra = m.Extra
+	}
+
 	return fm
 }
 
@@ -303,11 +316,11 @@ func FormatReport(report *SuggestionReport) string {
 
 	for _, tp := range report.TypePairs {
 		resultSb250.WriteString(fmt.Sprintf("\n=== %s -> %s ===\n", tp.Source, tp.Target))
-		resultSb250.WriteString(fmt.Sprintf("Explicit: %d, Ignored: %d, Auto-matched: %d, Unmapped: %d\n",
+		resultSb250.WriteString(fmt.Sprintf("Explicit: %d, Ignored: %d, Auto-mapped: %d, Unmapped: %d\n",
 			tp.ExplicitCount, tp.IgnoredCount, len(tp.AutoMatched), len(tp.Unmapped)))
 
 		if len(tp.AutoMatched) > 0 {
-			resultSb250.WriteString("\nAuto-matched fields:\n")
+			resultSb250.WriteString("\nAuto-mapped fields:\n")
 
 			var resultSb257 strings.Builder
 			for _, m := range tp.AutoMatched {

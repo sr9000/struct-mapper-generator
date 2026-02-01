@@ -333,6 +333,57 @@ func TestGenerator_Generate_WithTransform(t *testing.T) {
 	assert.Contains(t, content, "ConcatNames(in.FirstName, in.LastName)")
 }
 
+func TestGenerator_Generate_MissingTransformStubs(t *testing.T) {
+	srcType := &analyze.TypeInfo{
+		ID:   analyze.TypeID{PkgPath: "example/store", Name: "Order"},
+		Kind: analyze.TypeKindStruct,
+		Fields: []analyze.FieldInfo{
+			{Name: "ID", Exported: true, Type: &analyze.TypeInfo{
+				ID: analyze.TypeID{Name: "int64"}, Kind: analyze.TypeKindBasic,
+			}},
+		},
+	}
+
+	tgtType := &analyze.TypeInfo{
+		ID:   analyze.TypeID{PkgPath: "example/warehouse", Name: "Order"},
+		Kind: analyze.TypeKindStruct,
+		Fields: []analyze.FieldInfo{
+			{Name: "CustomerID", Exported: true, Type: &analyze.TypeInfo{
+				ID: analyze.TypeID{Name: "string"}, Kind: analyze.TypeKindBasic,
+			}},
+		},
+	}
+
+	resolvedPlan := &plan.ResolvedMappingPlan{
+		TypePairs: []plan.ResolvedTypePair{
+			{
+				SourceType: srcType,
+				TargetType: tgtType,
+				Mappings: []plan.ResolvedFieldMapping{
+					{
+						TargetPaths: []mapping.FieldPath{{Segments: []mapping.PathSegment{{Name: "CustomerID"}}}},
+						SourcePaths: []mapping.FieldPath{{Segments: []mapping.PathSegment{{Name: "ID"}}}},
+						Strategy:    plan.StrategyTransform,
+						Transform:   "ID2CustomerID",
+						Explanation: "custom transform",
+					},
+				},
+			},
+		},
+	}
+
+	gen := NewGenerator(DefaultGeneratorConfig())
+	files, err := gen.Generate(resolvedPlan)
+
+	require.NoError(t, err)
+	require.Len(t, files, 1)
+
+	content := string(files[0].Content)
+	assert.Contains(t, content, "out.CustomerID = ID2CustomerID(in.ID)")
+	assert.Contains(t, content, "func ID2CustomerID(v0 int64) string {")
+	assert.Contains(t, content, `panic("transform ID2CustomerID not implemented")`)
+}
+
 func TestTypeRef_String(t *testing.T) {
 	tests := []struct {
 		name     string

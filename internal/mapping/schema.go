@@ -1,6 +1,9 @@
 package mapping
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // MappingFile represents the root of a YAML mapping definition file.
 // This is the authoritative, human-reviewed mapping configuration.
@@ -22,6 +25,10 @@ type TypeMapping struct {
 
 	// Target type identifier (e.g., "warehouse.Order" or full path).
 	Target string `yaml:"target"`
+
+	// Requires lists external variables required by this mapping function.
+	// These become additional arguments to the generated function.
+	Requires StringArray `yaml:"requires,omitempty"`
 
 	// OneToOne is a simplified mapping syntax where keys are source fields
 	// and values are target fields. Supports 1:1 mappings only.
@@ -273,11 +280,35 @@ type FieldMapping struct {
 	// Required for many:1 mappings. For many:many, a unique transform
 	// name is auto-generated if not specified.
 	Transform string `yaml:"transform,omitempty"`
+
+	// Extra lists additional info field paths from the source type (or parent scope)
+	// that should be passed to the mapping/transform/caster.
+	Extra StringArray `yaml:"extra,omitempty"`
 }
 
 // StringOrArray is a type that can be unmarshaled from either a string or an array of strings.
 // This allows YAML fields to accept both "field" and ["field1", "field2"].
 type StringOrArray []string
+
+// StringArray is a string slice that can be unmarshaled from a single string or a list.
+type StringArray []string
+
+// UnmarshalYAML implements yaml.Unmarshaler.
+func (s *StringArray) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var single string
+	if err := unmarshal(&single); err == nil {
+		*s = []string{single}
+		return nil
+	}
+
+	var multi []string
+	if err := unmarshal(&multi); err == nil {
+		*s = multi
+		return nil
+	}
+
+	return fmt.Errorf("expected string or list of strings")
+}
 
 // Cardinality represents the mapping cardinality.
 type Cardinality int

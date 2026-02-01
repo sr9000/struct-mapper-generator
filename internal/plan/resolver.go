@@ -151,6 +151,7 @@ func (r *Resolver) resolveTypePairRecursive(
 		Mappings:        []ResolvedFieldMapping{},
 		UnmappedTargets: []UnmappedField{},
 		NestedPairs:     []NestedConversion{},
+		Requires:        nil, // No explicit requirements for auto-matched nested types
 	}
 
 	// Pre-cache to prevent infinite recursion for cyclic types
@@ -199,6 +200,7 @@ func (r *Resolver) resolveTypeMapping(
 		Mappings:        []ResolvedFieldMapping{},
 		UnmappedTargets: []UnmappedField{},
 		NestedPairs:     []NestedConversion{},
+		Requires:        tm.Requires, // Preserve requires
 	}
 
 	// Pre-cache to prevent infinite recursion for cyclic types
@@ -411,6 +413,7 @@ func (r *Resolver) resolveFieldMapping(
 		Confidence:    1.0,
 		Explanation:   explanation,
 		EffectiveHint: effectiveHint,
+		Extra:         fm.Extra, // Preserve extra
 	}, nil
 }
 

@@ -103,6 +103,9 @@ func (r *Resolver) Resolve() (*ResolvedMappingPlan, error) {
 		plan.TypePairs = append(plan.TypePairs, *resolved)
 	}
 
+	// Deduce types for 'requires' arguments from usage context
+	r.deduceRequiresTypes(plan)
+
 	// In strict mode, fail if there are unresolved targets
 	if r.config.StrictMode && plan.Diagnostics.HasErrors() {
 		return plan, errors.New("strict mode: resolution failed with errors")

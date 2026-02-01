@@ -297,12 +297,19 @@ type ExtraVals []ExtraVal
 
 // ExtraVal is a single extra value definition with a name.
 type ExtraVal struct {
-	Name string
-	Def  ExtraDef
+	Name string   `yaml:"name"`
+	Def  ExtraDef `yaml:"def"`
 }
 
 // UnmarshalYAML implements yaml.Unmarshaler.
 func (e *ExtraVals) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	// Try list of full ExtraVal objects (explicit syntax)
+	var objects []ExtraVal
+	if err := unmarshal(&objects); err == nil {
+		*e = objects
+		return nil
+	}
+
 	// Try list of strings first
 	var list []string
 	if err := unmarshal(&list); err == nil {
@@ -348,7 +355,7 @@ func (e *ExtraVals) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		return nil
 	}
 
-	return fmt.Errorf("expected string, list of strings, or map for extra")
+	return fmt.Errorf("expected string, list of strings, or map for extra (MODIFIED)")
 }
 
 // StringOrArray is a type that can be unmarshaled from either a string or an array of strings.

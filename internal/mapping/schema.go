@@ -602,8 +602,8 @@ func (f *FieldRefOrString) UnmarshalYAML(unmarshal func(interface{}) error) erro
 // ArgDef represents an argument definition (name and type).
 // Can be simpler string "name" (type is inferred or interface{}) or complex {name: type}.
 type ArgDef struct {
-	Name string
-	Type string
+	Name string `yaml:"name"`
+	Type string `yaml:"type"`
 }
 
 // ArgDefArray unmarshals a list of arguments.
@@ -622,8 +622,29 @@ func (a *ArgDefArray) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		case string:
 			result = append(result, ArgDef{Name: v, Type: "interface{}"})
 		case map[string]interface{}:
+			// Check if this is an explicit object definition (has "name" key)
+			if nameVal, hasName := v["name"]; hasName {
+				name, ok := nameVal.(string)
+				if !ok {
+					return fmt.Errorf("invalid argument name, expected string")
+				}
+
+				typeStr := "interface{}"
+				if typeVal, hasType := v["type"]; hasType {
+					if ts, ok := typeVal.(string); ok {
+						typeStr = ts
+					} else {
+						return fmt.Errorf("invalid argument type, expected string")
+					}
+				}
+
+				result = append(result, ArgDef{Name: name, Type: typeStr})
+				continue
+			}
+
+			// Fallback to Key-Value definition: { "paramName": "paramType" }
 			if len(v) != 1 {
-				return fmt.Errorf("invalid argument definition, expected {name: type}")
+				return fmt.Errorf("invalid argument definition, expected {name: type} or {name: ..., type: ...}")
 			}
 			for k, val := range v {
 				typeStr, ok := val.(string)

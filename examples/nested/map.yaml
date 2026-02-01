@@ -1,0 +1,53 @@
+version: "1"
+mappings:
+    - source: caster-generator/examples/nested.APIOrder
+      target: caster-generator/examples/nested.DomainOrder
+      fields:
+        - source:
+            Items: dive
+          target:
+            LineItems: dive
+          extra:
+            - name: OrderID
+              def:
+                target: OrderID
+        - source: ID
+          target: OrderID
+          transform: ID2OrderID
+      ignore:
+        - ShippingAddr
+      auto:
+        - source: Customer
+          target: Customer
+        - source: Status
+          target: OrderStatus
+        - source: CreatedAt
+          target: OrderedAt
+    - source: caster-generator/examples/nested.APICustomer
+      target: caster-generator/examples/nested.DomainCustomer
+      "121":
+        Email: EmailAddress
+        Name: FullName
+        Phone: PhoneNumber
+      fields:
+        - source: ID
+          target: CustomerID
+          transform: ID2CustomerID
+    - source: caster-generator/examples/nested.APIItem
+      target: caster-generator/examples/nested.DomainLineItem
+      requires:
+        - name: OrderID
+          type: interface{}
+      "121":
+        Name: ProductName
+        Quantity: Qty
+        SKU: ProductSKU
+      fields:
+        - source: OrderID
+          target: OrderID
+          transform: OrderID2OrderID
+        - source: UnitPrice
+          target: PriceCents
+          transform: UnitPrice2PriceCents
+      ignore:
+        - ID

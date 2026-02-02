@@ -26,24 +26,20 @@ This document tracks robustness work as a checkbox list, similar to `PLAN.md`.
   - `-min-gap`
   - `-ambiguity-threshold`
   - `-max-candidates`
-- [ ] (REJECTED) Thread threshold flags through `check` (optional, but useful for drift-checking suggestions)
-- [ ] (REJECTED) Thread threshold flags through `gen` (optional; most generation should be pinned by YAML, but helpful for `write-suggestions`)
 
 ### Explainability: rejected fields + thresholds
 
 - [x] Include threshold values in exported suggestion YAML (comments)
 - [x] Include per-field rejection reasons + top candidate summaries in YAML (comments on `ignore:` entries)
 - [x] Include per-field confidence + strategy summaries in YAML (comments on `auto:` items)
-- [ ] Ensure unmatched-but-not-ignored targets can be surfaced separately (don’t *only* encode them as ignore)
-- [ ] Add optional `--no-comments` switch for YAML output (for minimal diffs)
 
 ### Validation robustness (keep CLI usable)
 
 - [x] Restore / implement `internal/mapping.Validate()` so `gen` and `check` can validate YAML against code
 - [x] Provide a shared `mapping.ResolveTypeID()` used by both validation and transform registry
-- [ ] Expand validation to cover:
+- [x] Expand validation to cover:
   - [x] transforms referenced by mappings exist in registry
-  - [ ] `requires` referenced by `extra` are declared
+  - [x] `requires` referenced by `extra` are declared
 
 ### Workflow automation: examples + script
 

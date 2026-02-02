@@ -419,11 +419,55 @@ func (g *Generator) applyNestedCastStrategy(
 	}
 }
 
-func (g *Generator) applyTransformStrategy(assignment *assignmentData, m *plan.ResolvedFieldMapping, pair *plan.ResolvedTypePair) {
-	if m.Transform != "" {
-		args := g.buildTransformArgs(m.SourcePaths, pair)
-		assignment.SourceExpr = fmt.Sprintf("%s(%s)", m.Transform, args)
+func (g *Generator) applyTransformStrategy(
+	assignment *assignmentData,
+	m *plan.ResolvedFieldMapping,
+	pair *plan.ResolvedTypePair,
+) {
+	if m.Transform == "" {
+		return
 	}
+
+	args := g.buildTransformArgs(m.SourcePaths, pair)
+
+	// Append extras after explicit source paths (stable order as specified in YAML).
+	// Extras can reference either source fields or target fields.
+	if len(m.Extra) > 0 {
+		var extraArgs []string
+		for _, ev := range m.Extra {
+			// Prefer explicit source/target, else fallback to the extra name.
+			if ev.Def.Source != "" {
+				extraArgs = append(extraArgs, "in."+ev.Def.Source)
+				continue
+			}
+			if ev.Def.Target != "" {
+				extraArgs = append(extraArgs, "out."+ev.Def.Target)
+				continue
+			}
+
+			// If Name matches a required arg, it should be passed verbatim.
+			isReq := false
+			for _, req := range pair.Requires {
+				if req.Name == ev.Name {
+					isReq = true
+					break
+				}
+			}
+			if isReq {
+				extraArgs = append(extraArgs, ev.Name)
+			} else {
+				extraArgs = append(extraArgs, "in."+ev.Name)
+			}
+		}
+
+		if args == "" {
+			args = strings.Join(extraArgs, ", ")
+		} else {
+			args = args + ", " + strings.Join(extraArgs, ", ")
+		}
+	}
+
+	assignment.SourceExpr = fmt.Sprintf("%s(%s)", m.Transform, args)
 }
 
 // targetFieldExpr builds the target field expression (e.g., "out.Name", "out.Address.Street").
@@ -436,7 +480,11 @@ func (g *Generator) targetFieldExpr(paths []mapping.FieldPath) string {
 }
 
 // sourceFieldExpr builds the source field expression.
-func (g *Generator) sourceFieldExpr(paths []mapping.FieldPath, m *plan.ResolvedFieldMapping, pair *plan.ResolvedTypePair) string {
+func (g *Generator) sourceFieldExpr(
+	paths []mapping.FieldPath,
+	m *plan.ResolvedFieldMapping,
+	pair *plan.ResolvedTypePair,
+) string {
 	if len(paths) == 0 {
 		if m.Default != nil {
 			return *m.Default
@@ -571,7 +619,10 @@ func (g *Generator) buildTransformArgs(paths []mapping.FieldPath, pair *plan.Res
 }
 
 // identifyMissingTransforms finds referenced transforms that are not imported or defined.
-func (g *Generator) identifyMissingTransforms(pair *plan.ResolvedTypePair, imports map[string]importSpec) []MissingTransform {
+func (g *Generator) identifyMissingTransforms(
+	pair *plan.ResolvedTypePair,
+	imports map[string]importSpec,
+) []MissingTransform {
 	var missing []MissingTransform
 	seen := make(map[string]bool)
 
@@ -626,6 +677,7 @@ func (g *Generator) identifyMissingTransforms(pair *plan.ResolvedTypePair, impor
 	sort.Slice(missing, func(i, j int) bool {
 		return missing[i].Name < missing[j].Name
 	})
+
 	return missing
 }
 

@@ -126,7 +126,7 @@ func Validate(mf *MappingFile, graph *analyze.TypeGraph) *ValidationResult {
 
 		// fields + auto
 		for _, fm := range append(append([]FieldMapping{}, tm.Fields...), tm.Auto...) {
-			validateFieldMapping(res, tpStr, srcT, dstT, &fm, seenTransforms)
+			validateFieldMapping(res, tpStr, srcT, dstT, tm, &fm, seenTransforms)
 		}
 
 		// ignore paths
@@ -144,6 +144,7 @@ func validateFieldMapping(
 	res *ValidationResult,
 	typePairStr string,
 	srcT, dstT *analyze.TypeInfo,
+	parent *TypeMapping,
 	fm *FieldMapping,
 	knownTransforms map[string]struct{},
 ) {
@@ -204,6 +205,20 @@ func validateFieldMapping(
 		if ev.Name == "" {
 			res.addError(typePairStr, "", "extra entry has empty name")
 			continue
+		}
+
+		// If this extra is intended to satisfy a required argument, ensure it's declared.
+		if parent != nil {
+			declared := false
+			for i := range parent.Requires {
+				if parent.Requires[i].Name == ev.Name {
+					declared = true
+					break
+				}
+			}
+			if !declared {
+				res.addError(typePairStr, "", fmt.Sprintf("extra %q references an undeclared requires arg; add it under requires: or rename", ev.Name))
+			}
 		}
 
 		if ev.Def.Source != "" {

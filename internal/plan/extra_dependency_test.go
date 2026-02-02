@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"caster-generator/internal/analyze"
+	"caster-generator/internal/diagnostic"
 	"caster-generator/internal/mapping"
 )
 
@@ -19,7 +20,7 @@ func TestPopulateExtraTargetDependencies_BuildsDepsAndDetectsMissing(t *testing.
 	}
 
 	r := &Resolver{}
-	diags := &Diagnostics{}
+	diags := &diagnostic.Diagnostics{}
 	r.populateExtraTargetDependencies(pair, diags)
 
 	if len(pair.Mappings[1].DependsOnTargets) != 1 || pair.Mappings[1].DependsOnTargets[0].String() != "A" {

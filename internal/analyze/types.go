@@ -3,6 +3,8 @@ package analyze
 import (
 	"go/types"
 	"reflect"
+
+	"caster-generator/internal/common"
 )
 
 // TypeID uniquely identifies a type by its package path and name.
@@ -52,7 +54,7 @@ func (k TypeKind) String() string {
 	case TypeKindExternal:
 		return "external"
 	default:
-		return "unknown"
+		return common.UnknownStr
 	}
 }
 

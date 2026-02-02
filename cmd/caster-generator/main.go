@@ -8,15 +8,15 @@
 package main
 
 import (
+	"caster-generator/internal/analyze"
+	"caster-generator/internal/diagnostic"
+	"caster-generator/internal/gen"
+	"caster-generator/internal/mapping"
+	"caster-generator/internal/plan"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
-
-	"caster-generator/internal/analyze"
-	"caster-generator/internal/gen"
-	"caster-generator/internal/mapping"
-	"caster-generator/internal/plan"
 )
 
 const (
@@ -643,7 +643,7 @@ func extractPackagesFromMapping(mf *mapping.MappingFile) []string {
 }
 
 // printDiagnostics prints diagnostic information to stderr.
-func printDiagnostics(diags *plan.Diagnostics) {
+func printDiagnostics(diags *diagnostic.Diagnostics) {
 	if len(diags.Warnings) > 0 {
 		fmt.Fprintln(os.Stderr, "\nWarnings:")
 

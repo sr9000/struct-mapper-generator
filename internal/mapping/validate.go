@@ -1,90 +1,25 @@
 package mapping
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
 	"caster-generator/internal/analyze"
+	"caster-generator/internal/diagnostic"
 )
-
-// ValidationResult is returned by Validate.
-// It contains a list of errors and warnings.
-type ValidationResult struct {
-	Errors   []ValidationError
-	Warnings []ValidationWarning
-}
-
-// ValidationError represents a schema+typegraph validation error.
-type ValidationError struct {
-	TypePair  string
-	FieldPath string
-	Message   string
-}
-
-func (e ValidationError) Error() string {
-	var prefix []string
-	if e.TypePair != "" {
-		prefix = append(prefix, e.TypePair)
-	}
-
-	if e.FieldPath != "" {
-		prefix = append(prefix, e.FieldPath)
-	}
-
-	if len(prefix) > 0 {
-		return strings.Join(prefix, " ") + ": " + e.Message
-	}
-
-	return e.Message
-}
-
-// ValidationWarning represents a non-fatal validation issue.
-type ValidationWarning struct {
-	TypePair  string
-	FieldPath string
-	Message   string
-}
-
-// IsValid returns true if there are no errors.
-func (r *ValidationResult) IsValid() bool {
-	return len(r.Errors) == 0
-}
-
-// Error returns a combined error (or nil when valid).
-func (r *ValidationResult) Error() error {
-	if r.IsValid() {
-		return nil
-	}
-
-	var parts []string
-	for _, e := range r.Errors {
-		parts = append(parts, e.Error())
-	}
-
-	return errors.New(strings.Join(parts, "; "))
-}
-
-func (r *ValidationResult) addError(typePair, fieldPath, msg string) {
-	r.Errors = append(r.Errors, ValidationError{TypePair: typePair, FieldPath: fieldPath, Message: msg})
-}
-
-func (r *ValidationResult) addWarning(typePair, fieldPath, msg string) {
-	r.Warnings = append(r.Warnings, ValidationWarning{TypePair: typePair, FieldPath: fieldPath, Message: msg})
-}
 
 // Validate validates a mapping definition against the given type graph.
 // This is a structural validation step only; it doesn't try to prove type
 // convertibility beyond what can be checked with the available type info.
-func Validate(mf *MappingFile, graph *analyze.TypeGraph) *ValidationResult {
-	res := &ValidationResult{}
+func Validate(mf *MappingFile, graph *analyze.TypeGraph) *diagnostic.Diagnostics {
+	res := &diagnostic.Diagnostics{}
 	if mf == nil {
-		res.addError("", "", "mapping file is nil")
+		res.AddError("mapping_is_nil", "mapping file is nil", "", "")
 		return res
 	}
 
 	if graph == nil {
-		res.addError("", "", "type graph is nil")
+		res.AddError("graph_is_nil", "type graph is nil", "", "")
 		return res
 	}
 
@@ -98,7 +33,7 @@ func Validate(mf *MappingFile, graph *analyze.TypeGraph) *ValidationResult {
 		}
 
 		if _, ok := seenTransforms[name]; ok {
-			res.addError("", name, fmt.Sprintf("duplicate transform %q", name))
+			res.AddError("duplicate_transform", fmt.Sprintf("duplicate transform %q", name), "", name)
 			continue
 		}
 
@@ -111,24 +46,24 @@ func Validate(mf *MappingFile, graph *analyze.TypeGraph) *ValidationResult {
 
 		srcT := ResolveTypeID(tm.Source, graph)
 		if srcT == nil {
-			res.addError(tpStr, tm.Source, fmt.Sprintf("source type %q not found", tm.Source))
+			res.AddError("source_type_not_found", fmt.Sprintf("source type %q not found", tm.Source), tpStr, tm.Source)
 			continue
 		}
 
 		dstT := ResolveTypeID(tm.Target, graph)
 		if dstT == nil {
-			res.addError(tpStr, tm.Target, fmt.Sprintf("target type %q not found", tm.Target))
+			res.AddError("target_type_not_found", fmt.Sprintf("target type %q not found", tm.Target), tpStr, tm.Target)
 			continue
 		}
 
 		// 121 shorthand
 		for sp, tp := range tm.OneToOne {
 			if err := validatePathAgainstType(sp, srcT); err != nil {
-				res.addError(tpStr, sp, fmt.Sprintf("invalid source path in 121: %v", err))
+				res.AddError("invalid_source_path", fmt.Sprintf("invalid source path in 121: %v", err), tpStr, sp)
 			}
 
 			if err := validatePathAgainstType(tp, dstT); err != nil {
-				res.addError(tpStr, tp, fmt.Sprintf("invalid target path in 121: %v", err))
+				res.AddError("invalid_target_path", fmt.Sprintf("invalid target path in 121: %v", err), tpStr, tp)
 			}
 		}
 
@@ -140,7 +75,7 @@ func Validate(mf *MappingFile, graph *analyze.TypeGraph) *ValidationResult {
 		// ignore paths
 		for _, ig := range tm.Ignore {
 			if err := validatePathAgainstType(ig, dstT); err != nil {
-				res.addError(tpStr, ig, fmt.Sprintf("invalid ignore path: %v", err))
+				res.AddError("invalid_ignore_path", fmt.Sprintf("invalid ignore path: %v", err), tpStr, ig)
 			}
 		}
 	}
@@ -149,7 +84,7 @@ func Validate(mf *MappingFile, graph *analyze.TypeGraph) *ValidationResult {
 }
 
 func validateFieldMapping(
-	res *ValidationResult,
+	res *diagnostic.Diagnostics,
 	typePairStr string,
 	srcT, dstT *analyze.TypeInfo,
 	parent *TypeMapping,
@@ -165,36 +100,36 @@ func validateFieldMapping(
 	// validate target
 	for _, t := range fm.Target {
 		if t.Path == "" {
-			res.addError(typePairStr, "", "field mapping must specify target")
+			res.AddError("missing_target_path", "field mapping must specify target", typePairStr, "")
 			continue
 		}
 
 		if err := validatePathAgainstType(t.Path, dstT); err != nil {
-			res.addError(typePairStr, t.Path, fmt.Sprintf("invalid target path: %v", err))
+			res.AddError("invalid_target_path", fmt.Sprintf("invalid target path: %v", err), typePairStr, t.Path)
 		}
 
 		if !t.Hint.IsValid() {
-			res.addError(typePairStr, t.Path, fmt.Sprintf("invalid hint %q", t.Hint))
+			res.AddError("invalid_hint", fmt.Sprintf("invalid hint %q", t.Hint), typePairStr, t.Path)
 		}
 	}
 
 	// validate sources (unless default)
 	if fm.Default == nil {
 		if len(fm.Source) == 0 {
-			res.addError(typePairStr, "", "field mapping must specify source (or default)")
+			res.AddError("missing_source", "field mapping must specify source (or default)", typePairStr, "")
 		} else {
 			for _, s := range fm.Source {
 				if s.Path == "" {
-					res.addError(typePairStr, "", "field mapping must specify source")
+					res.AddError("empty_source_path", "field mapping must specify source", typePairStr, "")
 					continue
 				}
 
 				if err := validatePathAgainstType(s.Path, srcT); err != nil {
-					res.addError(typePairStr, s.Path, fmt.Sprintf("invalid source path: %v", err))
+					res.AddError("invalid_source_path", fmt.Sprintf("invalid source path: %v", err), typePairStr, s.Path)
 				}
 
 				if !s.Hint.IsValid() {
-					res.addError(typePairStr, s.Path, fmt.Sprintf("invalid hint %q", s.Hint))
+					res.AddError("invalid_hint", fmt.Sprintf("invalid hint %q", s.Hint), typePairStr, s.Path)
 				}
 			}
 		}
@@ -202,20 +137,20 @@ func validateFieldMapping(
 
 	// many:1 and many:many require a transform
 	if fm.NeedsTransform() && fm.Transform == "" {
-		res.addError(typePairStr, "", card.String()+" mapping requires transform")
+		res.AddError("missing_transform", card.String()+" mapping requires transform", typePairStr, "")
 	}
 
 	// A referenced transform must exist in the registry.
 	if fm.Transform != "" {
 		if _, ok := knownTransforms[fm.Transform]; !ok {
-			res.addError(typePairStr, "", fmt.Sprintf("referenced transform %q is not declared in transforms", fm.Transform))
+			res.AddError("unknown_transform", fmt.Sprintf("referenced transform %q is not declared in transforms", fm.Transform), typePairStr, "")
 		}
 	}
 
 	// validate extra definitions
 	for _, ev := range fm.Extra {
 		if ev.Name == "" {
-			res.addError(typePairStr, "", "extra entry has empty name")
+			res.AddError("empty_extra_name", "extra entry has empty name", typePairStr, "")
 			continue
 		}
 
@@ -231,19 +166,19 @@ func validateFieldMapping(
 			}
 
 			if !declared {
-				res.addError(typePairStr, "", fmt.Sprintf("extra %q references an undeclared requires arg; add it under requires: or rename", ev.Name))
+				res.AddError("undeclared_extra_arg", fmt.Sprintf("extra %q references an undeclared requires arg; add it under requires: or rename", ev.Name), typePairStr, "")
 			}
 		}
 
 		if ev.Def.Source != "" {
 			if err := validatePathAgainstType(ev.Def.Source, srcT); err != nil {
-				res.addError(typePairStr, ev.Def.Source, fmt.Sprintf("invalid extra.def.source: %v", err))
+				res.AddError("invalid_extra_source", fmt.Sprintf("invalid extra.def.source: %v", err), typePairStr, ev.Def.Source)
 			}
 		}
 
 		if ev.Def.Target != "" {
 			if err := validatePathAgainstType(ev.Def.Target, dstT); err != nil {
-				res.addError(typePairStr, ev.Def.Target, fmt.Sprintf("invalid extra.def.target: %v", err))
+				res.AddError("invalid_extra_target", fmt.Sprintf("invalid extra.def.target: %v", err), typePairStr, ev.Def.Target)
 			}
 		}
 	}

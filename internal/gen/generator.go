@@ -10,12 +10,10 @@ import (
 	"text/template"
 
 	"caster-generator/internal/analyze"
+	"caster-generator/internal/common"
 	"caster-generator/internal/mapping"
 	"caster-generator/internal/plan"
 )
-
-// interfaceTypeStr is used as a fallback type string.
-const interfaceTypeStr = "interface{}"
 
 // GeneratorConfig holds configuration for code generation.
 type GeneratorConfig struct {
@@ -204,8 +202,8 @@ type nestedCasterRef struct {
 
 // buildTemplateData constructs the template data from a resolved type pair.
 func (g *Generator) buildTemplateData(pair *plan.ResolvedTypePair) *templateData {
-	srcPkgAlias := g.pkgAlias(pair.SourceType.ID.PkgPath)
-	tgtPkgAlias := g.pkgAlias(pair.TargetType.ID.PkgPath)
+	srcPkgAlias := common.PkgAlias(pair.SourceType.ID.PkgPath)
+	tgtPkgAlias := common.PkgAlias(pair.TargetType.ID.PkgPath)
 
 	data := &templateData{
 		PackageName:      g.config.PackageName,
@@ -352,11 +350,11 @@ func (g *Generator) collectNestedCasters(
 		nestedRef := nestedCasterRef{
 			FunctionName: g.nestedFunctionName(nested.SourceType, nested.TargetType),
 			SourceType: typeRef{
-				Package: g.pkgAlias(nested.SourceType.ID.PkgPath),
+				Package: common.PkgAlias(nested.SourceType.ID.PkgPath),
 				Name:    nested.SourceType.ID.Name,
 			},
 			TargetType: typeRef{
-				Package: g.pkgAlias(nested.TargetType.ID.PkgPath),
+				Package: common.PkgAlias(nested.TargetType.ID.PkgPath),
 				Name:    nested.TargetType.ID.Name,
 			},
 		}
@@ -850,20 +848,12 @@ func (g *Generator) nestedFunctionName(src, tgt *analyze.TypeInfo) string {
 	return fmt.Sprintf("%s%sTo%s%s", srcPkg, src.ID.Name, tgtPkg, tgt.ID.Name)
 }
 
-func (g *Generator) pkgAlias(pkgPath string) string {
-	if pkgPath == "" {
-		return ""
-	}
-
-	return path.Base(pkgPath)
-}
-
 func (g *Generator) addImport(imports map[string]importSpec, pkgPath string) {
 	if pkgPath == "" {
 		return
 	}
 
-	alias := g.pkgAlias(pkgPath)
+	alias := common.PkgAlias(pkgPath)
 	imports[pkgPath] = importSpec{
 		Alias: alias,
 		Path:  pkgPath,
@@ -928,7 +918,7 @@ func (g *Generator) getFieldTypeString(
 ) string {
 	ft := g.getFieldTypeInfo(typeInfo, fieldPath)
 	if ft == nil {
-		return interfaceTypeStr
+		return common.InterfaceTypeStr
 	}
 
 	return g.typeRefString(ft, imports)
@@ -936,7 +926,7 @@ func (g *Generator) getFieldTypeString(
 
 func (g *Generator) typeRefString(t *analyze.TypeInfo, imports map[string]importSpec) string {
 	if t == nil {
-		return interfaceTypeStr
+		return common.InterfaceTypeStr
 	}
 
 	switch t.Kind {
@@ -948,14 +938,14 @@ func (g *Generator) typeRefString(t *analyze.TypeInfo, imports map[string]import
 			return "*" + g.typeRefString(t.ElemType, imports)
 		}
 
-		return "*" + interfaceTypeStr
+		return "*" + common.InterfaceTypeStr
 
 	case analyze.TypeKindSlice:
 		if t.ElemType != nil {
 			return "[]" + g.typeRefString(t.ElemType, imports)
 		}
 
-		return "[]" + interfaceTypeStr
+		return "[]" + common.InterfaceTypeStr
 
 	case analyze.TypeKindArray:
 		// Keep length information by using go/types' string.
@@ -966,13 +956,13 @@ func (g *Generator) typeRefString(t *analyze.TypeInfo, imports map[string]import
 		if t.ID.PkgPath != "" {
 			g.addImport(imports, t.ID.PkgPath)
 
-			return g.pkgAlias(t.ID.PkgPath) + "." + t.ID.Name
+			return common.PkgAlias(t.ID.PkgPath) + "." + t.ID.Name
 		}
 
 		return t.ID.Name
 
 	default:
-		return "interface{}"
+		return common.InterfaceTypeStr
 	}
 }
 

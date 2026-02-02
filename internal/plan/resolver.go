@@ -1,6 +1,7 @@
 package plan
 
 import (
+	"caster-generator/internal/diagnostic"
 	"errors"
 	"fmt"
 	"sort"
@@ -83,7 +84,7 @@ func NewResolver(
 func (r *Resolver) Resolve() (*ResolvedMappingPlan, error) {
 	plan := &ResolvedMappingPlan{
 		TypePairs:   []ResolvedTypePair{},
-		Diagnostics: Diagnostics{},
+		Diagnostics: diagnostic.Diagnostics{},
 	}
 
 	if r.mappingDef == nil {
@@ -119,7 +120,7 @@ func (r *Resolver) Resolve() (*ResolvedMappingPlan, error) {
 // and falls back to auto-matching if not.
 func (r *Resolver) resolveTypePairRecursive(
 	sourceType, targetType *analyze.TypeInfo,
-	diags *Diagnostics,
+	diags *diagnostic.Diagnostics,
 	depth int,
 ) (*ResolvedTypePair, error) {
 	if sourceType == nil || targetType == nil {
@@ -177,7 +178,7 @@ func (r *Resolver) resolveTypePairRecursive(
 // resolveTypeMapping resolves a single type mapping.
 func (r *Resolver) resolveTypeMapping(
 	tm *mapping.TypeMapping,
-	diags *Diagnostics,
+	diags *diagnostic.Diagnostics,
 ) (*ResolvedTypePair, error) {
 	// Resolve source and target types
 	sourceType := mapping.ResolveTypeID(tm.Source, r.graph)
@@ -600,7 +601,7 @@ func (r *Resolver) autoMatchRemainingFields(
 	result *ResolvedTypePair,
 	sourceType, targetType *analyze.TypeInfo,
 	mappedTargets map[string]bool,
-	diags *Diagnostics,
+	diags *diagnostic.Diagnostics,
 	typePairStr string,
 ) {
 	// Get all source fields for matching
@@ -781,7 +782,7 @@ func (r *Resolver) collectionElem(t *analyze.TypeInfo) *analyze.TypeInfo {
 //
 // Semantics: if a mapping for target field B uses extra.def.target = "A" (or "A.Sub")
 // then B depends on the assignment for A (or A.Sub).
-func (r *Resolver) populateExtraTargetDependencies(pair *ResolvedTypePair, diags *Diagnostics) {
+func (r *Resolver) populateExtraTargetDependencies(pair *ResolvedTypePair, diags *diagnostic.Diagnostics) {
 	if pair == nil {
 		return
 	}
@@ -861,7 +862,7 @@ func (r *Resolver) populateExtraTargetDependencies(pair *ResolvedTypePair, diags
 }
 
 // detectNestedConversions identifies nested struct conversions needed and recursively resolves them.
-func (r *Resolver) detectNestedConversions(result *ResolvedTypePair, diags *Diagnostics, depth int) {
+func (r *Resolver) detectNestedConversions(result *ResolvedTypePair, diags *diagnostic.Diagnostics, depth int) {
 	nestedMap := make(map[string]*NestedConversion)
 
 	for _, m := range result.Mappings {

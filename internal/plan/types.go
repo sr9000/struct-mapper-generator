@@ -2,12 +2,11 @@ package plan
 
 import (
 	"caster-generator/internal/analyze"
+	"caster-generator/internal/common"
+	"caster-generator/internal/diagnostic"
 	"caster-generator/internal/mapping"
 	"caster-generator/internal/match"
 )
-
-// unknownStr is used for unknown enum values.
-const unknownStr = "unknown"
 
 // ResolvedMappingPlan is the final output of the resolution pipeline.
 // It contains everything needed for code generation.
@@ -15,7 +14,7 @@ type ResolvedMappingPlan struct {
 	// TypePairs is the list of resolved type pair mappings.
 	TypePairs []ResolvedTypePair
 	// Diagnostics contains all warnings and errors from resolution.
-	Diagnostics Diagnostics
+	Diagnostics diagnostic.Diagnostics
 }
 
 // ArgDef represents a function argument definition.
@@ -100,7 +99,7 @@ func (s MappingSource) String() string {
 	case MappingSourceAutoMatched:
 		return "auto"
 	default:
-		return unknownStr
+		return common.UnknownStr
 	}
 }
 
@@ -154,7 +153,7 @@ func (s ConversionStrategy) String() string {
 	case StrategyIgnore:
 		return "ignore"
 	default:
-		return unknownStr
+		return common.UnknownStr
 	}
 }
 
@@ -183,95 +182,6 @@ type NestedConversion struct {
 	// ResolvedPair contains the recursively resolved mapping for this nested pair.
 	// May be nil if resolution was deferred or failed.
 	ResolvedPair *ResolvedTypePair
-}
-
-// Diagnostics holds all diagnostic information from resolution.
-type Diagnostics struct {
-	Errors   []Diagnostic
-	Warnings []Diagnostic
-}
-
-// Diagnostic represents a single diagnostic message.
-type Diagnostic struct {
-	// Severity of the diagnostic.
-	Severity DiagnosticSeverity
-	// Code is a unique identifier for this type of diagnostic.
-	Code string
-	// Message is the human-readable description.
-	Message string
-	// TypePair identifies which type mapping this relates to (if any).
-	TypePair string
-	// FieldPath identifies which field this relates to (if any).
-	FieldPath string
-	// Suggestions are potential fixes or alternatives.
-	Suggestions []string
-}
-
-// DiagnosticSeverity represents the severity level of a diagnostic.
-type DiagnosticSeverity int
-
-const (
-	DiagnosticInfo DiagnosticSeverity = iota
-	DiagnosticWarning
-	DiagnosticError
-)
-
-// String returns a human-readable severity name.
-func (s DiagnosticSeverity) String() string {
-	switch s {
-	case DiagnosticInfo:
-		return "info"
-	case DiagnosticWarning:
-		return "warning"
-	case DiagnosticError:
-		return "error"
-	default:
-		return "unknown"
-	}
-}
-
-// AddError adds an error diagnostic.
-func (d *Diagnostics) AddError(code, message, typePair, fieldPath string) {
-	d.Errors = append(d.Errors, Diagnostic{
-		Severity:  DiagnosticError,
-		Code:      code,
-		Message:   message,
-		TypePair:  typePair,
-		FieldPath: fieldPath,
-	})
-}
-
-// AddWarning adds a warning diagnostic.
-func (d *Diagnostics) AddWarning(code, message, typePair, fieldPath string) {
-	d.Warnings = append(d.Warnings, Diagnostic{
-		Severity:  DiagnosticWarning,
-		Code:      code,
-		Message:   message,
-		TypePair:  typePair,
-		FieldPath: fieldPath,
-	})
-}
-
-// AddInfo adds an info diagnostic.
-func (d *Diagnostics) AddInfo(code, message, typePair, fieldPath string) {
-	d.Warnings = append(d.Warnings, Diagnostic{
-		Severity:  DiagnosticInfo,
-		Code:      code,
-		Message:   message,
-		TypePair:  typePair,
-		FieldPath: fieldPath,
-	})
-}
-
-// HasErrors returns true if there are any error-level diagnostics.
-func (d *Diagnostics) HasErrors() bool {
-	return len(d.Errors) > 0
-}
-
-// Merge combines diagnostics from another Diagnostics instance.
-func (d *Diagnostics) Merge(other *Diagnostics) {
-	d.Errors = append(d.Errors, other.Errors...)
-	d.Warnings = append(d.Warnings, other.Warnings...)
 }
 
 // IncompleteMappingInfo describes a mapping that requires a transform but doesn't have one.

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"caster-generator/internal/common"
 )
 
 // MappingFile represents the root of a YAML mapping definition file.
@@ -411,7 +413,7 @@ func (c Cardinality) String() string {
 	case CardinalityManyToMany:
 		return "N:M"
 	default:
-		return "unknown"
+		return common.UnknownStr
 	}
 }
 
@@ -498,7 +500,7 @@ func (p MappingPriority) String() string {
 	case PriorityAuto:
 		return "auto"
 	default:
-		return "unknown"
+		return common.UnknownStr
 	}
 }
 

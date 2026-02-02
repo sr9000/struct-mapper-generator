@@ -5,10 +5,8 @@ import (
 	"strings"
 
 	"caster-generator/internal/analyze"
+	"caster-generator/internal/common"
 )
-
-// interfaceTypeStr is the default type string for unknown types.
-const interfaceTypeStr = "interface{}"
 
 // TransformRegistry holds validated transform definitions and provides lookup.
 type TransformRegistry struct {
@@ -41,7 +39,7 @@ func BuildRegistry(mf *MappingFile, graph *analyze.TypeGraph) (*TransformRegistr
 
 		// Resolve source type
 		var sourceType *analyze.TypeInfo
-		if def.SourceType != "" && !isBasicTypeName(def.SourceType) {
+		if def.SourceType != "" && !IsBasicTypeName(def.SourceType) {
 			sourceType = ResolveTypeID(def.SourceType, graph)
 			if sourceType == nil {
 				errs = append(errs, fmt.Errorf(
@@ -52,7 +50,7 @@ func BuildRegistry(mf *MappingFile, graph *analyze.TypeGraph) (*TransformRegistr
 
 		// Resolve target type
 		var targetType *analyze.TypeInfo
-		if def.TargetType != "" && !isBasicTypeName(def.TargetType) {
+		if def.TargetType != "" && !IsBasicTypeName(def.TargetType) {
 			targetType = ResolveTypeID(def.TargetType, graph)
 			if targetType == nil {
 				errs = append(errs, fmt.Errorf(
@@ -147,10 +145,6 @@ func IsBasicTypeName(name string) bool {
 	return basicTypes[name]
 }
 
-func isBasicTypeName(name string) bool {
-	return basicTypes[name]
-}
-
 // GenerateTransformName generates a unique transform name for a field mapping.
 // Used for auto-generating transforms for many:1 or many:many mappings.
 func GenerateTransformName(sources, targets StringOrArray) string {
@@ -194,12 +188,12 @@ func extractFieldName(path string) string {
 func GenerateStub(def *TransformDef) string {
 	sourceType := def.SourceType
 	if sourceType == "" {
-		sourceType = interfaceTypeStr
+		sourceType = common.InterfaceTypeStr
 	}
 
 	targetType := def.TargetType
 	if targetType == "" {
-		targetType = interfaceTypeStr
+		targetType = common.InterfaceTypeStr
 	}
 
 	comment := "// " + def.Func + " transforms a value from source to target type."
@@ -218,7 +212,7 @@ func %s(src %s) %s {
 func GenerateMultiSourceStub(def *TransformDef, sourceFields []string) string {
 	targetType := def.TargetType
 	if targetType == "" {
-		targetType = interfaceTypeStr
+		targetType = common.InterfaceTypeStr
 	}
 
 	// Build parameter list
@@ -226,7 +220,7 @@ func GenerateMultiSourceStub(def *TransformDef, sourceFields []string) string {
 
 	for _, field := range sourceFields {
 		paramName := strings.ToLower(extractFieldName(field)[:1]) + extractFieldName(field)[1:]
-		params = append(params, paramName+" "+interfaceTypeStr)
+		params = append(params, paramName+" "+common.InterfaceTypeStr)
 	}
 
 	comment := "// " + def.Func + " combines multiple source fields into a single target value."

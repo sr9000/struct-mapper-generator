@@ -60,12 +60,13 @@ func (k TypeKind) String() string {
 
 // TypeInfo describes a Go type in the type graph.
 type TypeInfo struct {
-	ID         TypeID      // Unique identifier (empty for unnamed types like *T or []T)
-	Kind       TypeKind    // Kind of type
-	Underlying *TypeInfo   // For named types, the underlying type
-	ElemType   *TypeInfo   // For pointers and slices, the element type
-	Fields     []FieldInfo // For structs, the list of fields
-	GoType     types.Type  // The original go/types.Type (for compatibility checks)
+	ID          TypeID      // Unique identifier (empty for unnamed types like *T or []T)
+	Kind        TypeKind    // Kind of type
+	Underlying  *TypeInfo   // For named types, the underlying type
+	ElemType    *TypeInfo   // For pointers and slices, the element type
+	Fields      []FieldInfo // For structs, the list of fields
+	GoType      types.Type  // The original go/types.Type (for compatibility checks)
+	IsGenerated bool        // True if the type is virtual/generated
 }
 
 // IsNamed returns true if this type has a name (TypeID is set).

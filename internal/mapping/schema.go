@@ -39,6 +39,14 @@ type TypeMapping struct {
 	// Example: { "OrderID": "ID", "CustomerName": "Customer" }
 	OneToOne map[string]string `yaml:"121,omitempty"`
 
+	// GenerateTarget indicates that the target type should be generated
+	// if it does not exist. The structure will be inferred from the mapping.
+	GenerateTarget bool `yaml:"generate_target,omitempty"`
+
+	// Fields defines explicit field mappings with full control.
+	// if it does not exist. The structure will be inferred from the mapping.
+	GenerateTarget bool `yaml:"generate_target,omitempty"`
+
 	// Fields defines explicit field mappings with full control.
 	// Supports 1:1, 1:many, many:1, and many:many with transforms.
 	// Priority: second highest (after 121).
@@ -274,6 +282,11 @@ type FieldMapping struct {
 	// Target is the target field path(s) with optional hints.
 	// Examples: "Name", ["FirstName", "DisplayName"], {Address: dive}
 	Target FieldRefArray `yaml:"target"`
+
+	// TargetType explicitly defines the type of the target field
+	// when GenerateTarget is used on the parent mapping.
+	// Examples: "string", "*int", "my.Type".
+	TargetType string `yaml:"target_type,omitempty"`
 
 	// Default is a literal value to assign if Source is empty.
 	// Supports basic types: strings (quoted), numbers, booleans.

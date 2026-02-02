@@ -216,6 +216,247 @@ type templateData struct {
 	NestedCasters     []nestedCasterRef
 	MissingTransforms []MissingTransform
 	ExtraArgs         []extraArg
+	StructDef         string
+}
+
+type extraArg struct {
+	Name string
+	Type string
+}
+
+// importSpec represents an import statement.
+type importSpec struct {
+	Alias string
+	Path  string
+}
+
+// typeRef is a reference to a type with optional package qualifier.
+type typeRef struct {
+	Package   string // Package alias (empty if same package or builtin)
+	Name      string // Type name
+	IsPointer bool
+	IsSlice   bool
+	ElemRef   *typeRef // For slice/pointer, the element type
+}
+
+// String returns the full type string (e.g., "store.Order", "*warehouse.Product", "[]int").
+func (t typeRef) String() string {
+	var sb strings.Builder
+
+	if t.IsPointer {
+		sb.WriteString("*")
+	}
+
+	if t.IsSlice {
+		sb.WriteString("[]")
+
+		if t.ElemRef != nil {
+			sb.WriteString(t.ElemRef.String())
+
+			return sb.String()
+		}
+	}
+
+	if t.Package != "" {
+		sb.WriteString(t.Package)
+		sb.WriteString(".")
+	}
+
+	sb.WriteString(t.Name)
+
+	return sb.String()
+}
+
+// assignmentData represents a single field assignment in the caster.
+type assignmentData struct {
+	TargetField string
+	SourceExpr  string
+	Comment     string
+	Strategy    plan.ConversionStrategy
+	// For slice mapping
+	IsSlice      bool
+	SliceElemVar string
+	SliceBody    string
+	// For nested caster
+	NestedCaster string
+	// For nil check wrapper
+	NeedsNilCheck bool
+	NilDefault    string
+	// For pointer nil check
+	NilCheckExpr string
+}
+
+// nestedCasterRef tracks a nested caster function that needs to be called.
+type nestedCasterRef struct {
+	FunctionName string
+	SourceType   typeRef
+	TargetType   typeRef
+}
+
+// NewGenerator creates a new Generator with the given configuration.
+func NewGenerator(config GeneratorConfig) *Generator {
+	return &Generator{config: config}
+}
+
+// GeneratedFile represents a generated Go source file.
+type GeneratedFile struct {
+	// Filename is the name of the file (e.g., "store_order_to_warehouse_order.go").
+	Filename string
+	// Content is the formatted Go source code.
+	Content []byte
+}
+
+// Generate generates Go code from a ResolvedMappingPlan.
+// Returns a list of generated files.
+func (g *Generator) Generate(p *plan.ResolvedMappingPlan) ([]GeneratedFile, error) {
+	g.graph = p.TypeGraph
+	var files []GeneratedFile
+
+	// Reset missing transforms for this run
+	g.missingTransforms = make(map[string]MissingTransformInfo)
+
+	for _, pair := range p.TypePairs {
+		file, err := g.generateTypePair(&pair)
+		if err != nil {
+			return nil, fmt.Errorf("generating %s->%s: %w",
+				pair.SourceType.ID, pair.TargetType.ID, err)
+		}
+
+		files = append(files, *file)
+	}
+
+	// Generate missing transforms file if needed
+	if len(g.missingTransforms) > 0 {
+		file, err := g.generateMissingTransformsFile()
+		if err != nil {
+			return nil, fmt.Errorf("generating missing transforms: %w", err)
+		}
+		files = append(files, *file)
+	}
+
+	return files, nil
+}
+
+// generateMissingTransformsFile generates a shared file for missing transforms.
+func (g *Generator) generateMissingTransformsFile() (*GeneratedFile, error) {
+	data := &templateData{
+		PackageName: g.config.PackageName,
+		Filename:    "missing_transforms.go",
+	}
+
+	imports := make(map[string]importSpec)
+
+	// Convert g.missingTransforms to slice for template
+	var missing []MissingTransform
+
+	// Sorted iteration to ensure deterministic output
+	var keys []string
+	for k := range g.missingTransforms {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, name := range keys {
+		info := g.missingTransforms[name]
+
+		var argTypes []string
+		for _, argInfo := range info.Args {
+			argTypes = append(argTypes, g.typeRefString(argInfo, imports))
+		}
+
+		returnType := g.typeRefString(info.ReturnType, imports)
+
+		missing = append(missing, MissingTransform{
+			Name:       info.Name,
+			Args:       argTypes,
+			ReturnType: returnType,
+		})
+	}
+
+	data.MissingTransforms = missing
+
+	// Convert imports map to sorted slice
+	for _, imp := range imports {
+		data.Imports = append(data.Imports, imp)
+	}
+	sort.Slice(data.Imports, func(i, j int) bool {
+		return data.Imports[i].Path < data.Imports[j].Path
+	})
+
+	var buf bytes.Buffer
+	if err := missingTransformsTemplate.Execute(&buf, data); err != nil {
+		return nil, fmt.Errorf("executing template: %w", err)
+	}
+
+	formatted, err := format.Source(buf.Bytes())
+	if err != nil {
+		if g.config.OutputDir != "" {
+			_ = writeDebugUnformatted(g.config.OutputDir, data.Filename, buf.Bytes())
+		}
+		return &GeneratedFile{
+			Filename: data.Filename,
+			Content:  buf.Bytes(),
+		}, fmt.Errorf("formatting code: %w", err)
+	}
+
+	return &GeneratedFile{
+		Filename: data.Filename,
+		Content:  formatted,
+	}, nil
+}
+
+// generateTypePair generates code for a single type pair.
+func (g *Generator) generateTypePair(pair *plan.ResolvedTypePair) (*GeneratedFile, error) {
+	data := g.buildTemplateData(pair)
+
+	var buf bytes.Buffer
+	if err := casterTemplate.Execute(&buf, data); err != nil {
+		return nil, fmt.Errorf("executing template: %w", err)
+	}
+
+	// Format the generated code
+	formatted, err := format.Source(buf.Bytes())
+	if err != nil {
+		// Best-effort: write unformatted code to a sidecar file to aid debugging.
+		// This is intentionally non-fatal for the write attempt.
+		if g.config.OutputDir != "" {
+			_ = writeDebugUnformatted(g.config.OutputDir, data.Filename, buf.Bytes())
+		}
+		// Return unformatted code for debugging
+		return &GeneratedFile{
+			Filename: data.Filename,
+			Content:  buf.Bytes(),
+		}, fmt.Errorf("formatting code: %w (unformatted code returned)", err)
+	}
+
+	return &GeneratedFile{
+		Filename: data.Filename,
+		Content:  formatted,
+	}, nil
+}
+
+// MissingTransform represents a missing transform function that needs stub generation.
+type MissingTransform struct {
+	Name       string
+	Args       []string
+	ReturnType string
+}
+
+// templateData holds all data needed for the caster template.
+type templateData struct {
+	PackageName       string
+	Filename          string
+	Imports           []importSpec
+	FunctionName      string
+	SourceType        typeRef
+	TargetType        typeRef
+	Assignments       []assignmentData
+	UnmappedTODOs     []string
+	GenerateComments  bool
+	NestedCasters     []nestedCasterRef
+	MissingTransforms []MissingTransform
+	ExtraArgs         []extraArg
+	StructDef         string
 }
 
 type extraArg struct {
@@ -326,6 +567,11 @@ func (g *Generator) buildTemplateData(pair *plan.ResolvedTypePair) *templateData
 	imports := make(map[string]importSpec)
 	g.addImport(imports, pair.SourceType.ID.PkgPath)
 	g.addImport(imports, pair.TargetType.ID.PkgPath)
+
+	// Generate struct definition if needed
+	if structDef, err := g.GenerateStruct(pair, imports); err == nil {
+		data.StructDef = structDef
+	}
 
 	// Process mappings
 	for _, m := range pair.Mappings {

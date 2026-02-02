@@ -39,6 +39,8 @@ type ResolvedTypePair struct {
 	NestedPairs []NestedConversion
 	// Requires lists external variables required by this mapping function.
 	Requires []mapping.ArgDef
+	// IsGeneratedTarget is true if the target type is generated from the mapping.
+	IsGeneratedTarget bool
 }
 
 // ResolvedFieldMapping represents a single resolved field mapping.

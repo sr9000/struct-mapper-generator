@@ -1,0 +1,16 @@
+version: 1
+
+types:
+  - from: caster-generator/examples/arrays.APIBox
+    to: caster-generator/examples/arrays.DomainBox
+    fields:
+      - target: Corners
+        source: Corners
+        hint: dive
+  - from: caster-generator/examples/arrays.APIPoint
+    to: caster-generator/examples/arrays.DomainPoint
+    fields:
+      - target: X
+        source: X
+      - target: Y
+        source: Y

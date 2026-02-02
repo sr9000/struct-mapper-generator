@@ -136,6 +136,10 @@ func (a *Analyzer) analyzeType(t types.Type) *TypeInfo {
 		info.Kind = TypeKindSlice
 		info.ElemType = a.analyzeType(tt.Elem())
 
+	case *types.Array:
+		info.Kind = TypeKindArray
+		info.ElemType = a.analyzeType(tt.Elem())
+
 	case *types.Struct:
 		info.Kind = TypeKindStruct
 		a.analyzeStructFields(tt, info)

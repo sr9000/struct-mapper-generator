@@ -22,6 +22,7 @@ func TestGenerate_PointersExample_Compiles(t *testing.T) {
 	_ = os.RemoveAll(outDir)
 
 	cmd := exec.Command("go", "run", "./cmd/caster-generator", "gen",
+		"-pkg", "./examples/pointers",
 		"-mapping", filepath.Join(exampleDir, "map.yaml"),
 		"-out", outDir,
 	)

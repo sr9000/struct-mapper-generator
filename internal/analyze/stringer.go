@@ -1,6 +1,7 @@
 package analyze
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -97,6 +98,11 @@ func (s *TypeStringer) TypeString(t *TypeInfo) string {
 		}
 
 		return "[]<unknown>"
+
+	case TypeKindArray:
+		// For arrays, prefer the full go/types string which includes the length.
+		// (We intentionally don't model length in TypeInfo today.)
+		return t.GoType.String()
 
 	case TypeKindAlias:
 		if t.IsNamed() {
@@ -196,7 +202,18 @@ func (s *TypeStringer) processNestedType(
 			s.processNestedType(t.ElemType, slicePath, result, depth, maxDepth)
 		}
 
+	case TypeKindArray:
+		// For pathing purposes, arrays behave like slices (iterate elements).
+		// We represent them with [] in the path string, even though the concrete
+		// type string is [N]T.
+		slicePath := path.Slice()
+		if t.ElemType != nil {
+			s.processNestedType(t.ElemType, slicePath, result, depth, maxDepth)
+		}
+
 	case TypeKindBasic, TypeKindAlias, TypeKindExternal, TypeKindUnknown:
 		// Terminal types - nothing to recurse into
+	default:
+		_ = fmt.Sprintf("%v", t.Kind) // keep switch exhaustive-ish
 	}
 }

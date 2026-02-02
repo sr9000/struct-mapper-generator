@@ -2,7 +2,7 @@
 # It intentionally focuses on pointer deref behavior.
 #
 # Usage (from repo root):
-#   go run ./cmd/caster-generator gen -mapping ./examples/pointers/map.yaml
+#   go run ./cmd/caster-generator gen -pkg ./examples/pointers -mapping ./examples/pointers/map.yaml
 
 version: "1"
 

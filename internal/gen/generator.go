@@ -565,6 +565,13 @@ func (g *Generator) generateSliceLoopCode(
 	tgtElemStr := g.typeRefString(tgtElem, imports)
 	elemConv := g.buildElementConversion(srcField, srcElem, tgtElem, tgtElemStr)
 
+	// Arrays are fixed size; slices are variable.
+	if srcType.Kind == analyze.TypeKindArray && tgtType.Kind == analyze.TypeKindArray {
+		return fmt.Sprintf(`for i := range %s {
+		%s[i] = %s
+	}`, srcField, tgtField, elemConv)
+	}
+
 	return fmt.Sprintf(`%s = make([]%s, len(%s))
 	for i := range %s {
 		%s[i] = %s
@@ -573,6 +580,10 @@ func (g *Generator) generateSliceLoopCode(
 
 func (g *Generator) getSliceElementType(t *analyze.TypeInfo) *analyze.TypeInfo {
 	if t.Kind == analyze.TypeKindSlice && t.ElemType != nil {
+		return t.ElemType
+	}
+
+	if t.Kind == analyze.TypeKindArray && t.ElemType != nil {
 		return t.ElemType
 	}
 
@@ -826,6 +837,11 @@ func (g *Generator) typeRefString(t *analyze.TypeInfo, imports map[string]import
 
 		return "[]" + interfaceTypeStr
 
+	case analyze.TypeKindArray:
+		// Keep length information by using go/types' string.
+		// This avoids having to store the array length explicitly in TypeInfo.
+		return t.GoType.String()
+
 	case analyze.TypeKindStruct, analyze.TypeKindExternal, analyze.TypeKindAlias:
 		if t.ID.PkgPath != "" {
 			g.addImport(imports, t.ID.PkgPath)
@@ -858,7 +874,7 @@ func (g *Generator) zeroValueForType(ft *analyze.TypeInfo) string {
 	case analyze.TypeKindBasic:
 		return g.zeroValueForBasicType(ft.ID.Name)
 
-	case analyze.TypeKindPointer, analyze.TypeKindSlice:
+	case analyze.TypeKindPointer, analyze.TypeKindSlice, analyze.TypeKindArray:
 		return "nil"
 
 	case analyze.TypeKindStruct:

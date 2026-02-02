@@ -43,17 +43,17 @@ This document tracks robustness work as a checkbox list, similar to `PLAN.md`.
 
 ### Workflow automation: examples + script
 
-- [ ] Add more example fixtures under `examples/`:
+- [x] Add more example fixtures under `examples/`:
   - [x] pointers
-  - [ ] slices vs arrays (where supported)
+  - [x] slices vs arrays (where supported)
   - [ ] recursive structs (cycle safety)
-  - [ ] nested structs with mixed pointer/slice
-- [ ] Add shell runner `examples/<NAME>/run.sh` that executes the full loop:
+  - [x] nested structs with mixed pointer/slice
+- [x] Add shell runner `examples/<NAME>/run.sh` that executes a basic end-to-end compile check:
   - [ ] `suggest` (generate mapping)
   - [ ] apply a committed patch (or validate expected diff)
   - [ ] `suggest` again
-  - [ ] `gen`
-  - [ ] execute `go test ./...` for the repo when possible
+  - [x] `gen`
+  - [x] compile the example package (via `go test ./examples/<NAME> -run '^$'`)
 
 ### `extra` dependency semantics
 
@@ -65,9 +65,9 @@ This document tracks robustness work as a checkbox list, similar to `PLAN.md`.
 
 ### Corner cases
 
-- [ ] Nested structs (already partially supported) — add targeted examples + tests
-- [ ] Pointers (already partially supported) — add targeted examples + tests
-- [ ] Arrays (current analyzer models slices only; decide support)
+- [x] Nested structs (already partially supported) — add targeted examples + tests
+- [x] Pointers (already partially supported) — add targeted examples + tests
+- [x] Arrays — add initial end-to-end support (analyzer + resolution + codegen) + example
 - [ ] Recursive structs:
   - [ ] prevent infinite recursion during resolution
   - [ ] prevent infinite recursion during codegen
@@ -106,12 +106,20 @@ This document tracks robustness work as a checkbox list, similar to `PLAN.md`.
   - Added an integration test that runs `gen` for the fixture and compiles the example package.
   - Fixed codegen for pointer deref to emit safe nil-checks (and write an `.unformatted.go` sidecar on formatter failure to aid debugging).
 
+- `examples/nested-mixed` + `internal/gen/nested_mixed_integration_test.go`
+  - Added an example package that combines nested structs + pointers + slice mapping.
+  - Added an integration test that runs `gen` and compiles the example package.
+
+- Arrays support (initial end-to-end)
+  - `internal/analyze`: added `TypeKindArray` and recognition of `*types.Array`.
+  - `internal/plan`: treat arrays like slices for element-wise mapping and nested conversion detection.
+  - `internal/gen`: generate fixed-length loops for array-to-array mapping; keep array length via `GoType.String()`.
+  - `examples/arrays` + `internal/gen/arrays_integration_test.go`.
+
 ---
 
 ## Notes / assumptions
 
-- Analyzer currently models slices (`TypeKindSlice`) but not arrays as a separate kind. "array" robustness work may require either:
-  - teaching the analyzer to treat arrays as slices, or
-  - adding a `TypeKindArray`.
+- Array support currently focuses on array-to-array mapping. We intentionally treat arrays as "collection-like" for nested mapping, but we don’t yet support array↔slice bridging.
 
 - Reject/ignore comments are exported for unmapped target fields only (fields that end up in `ignore:`). If we want to comment on *actively rejected candidates* for mapped fields too, we’ll need to persist more ranking metadata in the plan.

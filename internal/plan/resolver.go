@@ -494,6 +494,15 @@ func (r *Resolver) determineStrategyWithHint(
 			return StrategySliceMap, explSliceMap
 		}
 
+		if sourceFieldType.Kind == analyze.TypeKindArray && targetFieldType.Kind == analyze.TypeKindArray {
+			// Arrays are treated like slices for mapping purposes (element-wise).
+			if hint == mapping.HintDive {
+				return StrategySliceMap, explSliceMap + " (dive, array)"
+			}
+
+			return StrategySliceMap, explSliceMap + " (array)"
+		}
+
 		if sourceFieldType.Kind == analyze.TypeKindStruct && targetFieldType.Kind == analyze.TypeKindStruct {
 			// For structs, check if hint says dive (recursively map fields) or final
 			if hint == mapping.HintDive {
@@ -520,6 +529,14 @@ func (r *Resolver) determineStrategyWithHint(
 			}
 
 			return StrategySliceMap, explSliceMap
+		}
+
+		if sourceFieldType.Kind == analyze.TypeKindArray && targetFieldType.Kind == analyze.TypeKindArray {
+			if hint == mapping.HintDive {
+				return StrategySliceMap, explSliceMap + " (dive, array)"
+			}
+
+			return StrategySliceMap, explSliceMap + " (array)"
 		}
 
 		return StrategyTransform, "incompatible"
@@ -600,7 +617,8 @@ func (r *Resolver) autoMatchRemainingFields(
 
 				// Allow struct-to-struct or slice-to-slice with good name match
 				if (srcKind == analyze.TypeKindStruct && tgtKind == analyze.TypeKindStruct) ||
-					(srcKind == analyze.TypeKindSlice && tgtKind == analyze.TypeKindSlice) {
+					(srcKind == analyze.TypeKindSlice && tgtKind == analyze.TypeKindSlice) ||
+					(srcKind == analyze.TypeKindArray && tgtKind == analyze.TypeKindArray) {
 					best = topCandidate
 				}
 			}
@@ -699,6 +717,11 @@ func (r *Resolver) determineStrategyFromCandidate(cand *match.Candidate) (Conver
 			if srcKind == analyze.TypeKindSlice && tgtKind == analyze.TypeKindSlice {
 				return StrategySliceMap, "slice map"
 			}
+
+			// Handle array-to-array
+			if srcKind == analyze.TypeKindArray && tgtKind == analyze.TypeKindArray {
+				return StrategySliceMap, "array map"
+			}
 		}
 
 		return StrategyTransform, cand.TypeCompat.Reason
@@ -716,13 +739,30 @@ func (r *Resolver) determineStrategyFromCandidate(cand *match.Candidate) (Conver
 			if srcKind == analyze.TypeKindSlice && tgtKind == analyze.TypeKindSlice {
 				return StrategySliceMap, "slice map"
 			}
+
+			if srcKind == analyze.TypeKindArray && tgtKind == analyze.TypeKindArray {
+				return StrategySliceMap, "array map"
+			}
 		}
 
 		return StrategyTransform, "incompatible"
 	}
 }
 
+// collectionElem returns the element type for a slice or array, if applicable.
+func (r *Resolver) collectionElem(t *analyze.TypeInfo) *analyze.TypeInfo {
+	if t == nil {
+		return nil
+	}
+	if (t.Kind == analyze.TypeKindSlice || t.Kind == analyze.TypeKindArray) && t.ElemType != nil {
+		return t.ElemType
+	}
+	return nil
+}
+
 // detectNestedConversions identifies nested struct conversions needed and recursively resolves them.
+//
+//nolint:gocyclo // This function intentionally trades complexity for locality/readability.
 func (r *Resolver) detectNestedConversions(result *ResolvedTypePair, diags *Diagnostics, depth int) {
 	nestedMap := make(map[string]*NestedConversion)
 
@@ -734,18 +774,17 @@ func (r *Resolver) detectNestedConversions(result *ResolvedTypePair, diags *Diag
 				targetFieldType := r.resolveFieldType(m.TargetPaths[0], result.TargetType)
 
 				if sourceFieldType != nil && targetFieldType != nil {
-					// For slice mappings, get the element types
+					// For slice/array mappings, get the element types
 					isSlice := m.Strategy == StrategySliceMap
 					actualSourceType := sourceFieldType
 					actualTargetType := targetFieldType
 
 					if isSlice {
-						if sourceFieldType.Kind == analyze.TypeKindSlice && sourceFieldType.ElemType != nil {
-							actualSourceType = sourceFieldType.ElemType
+						if elem := r.collectionElem(sourceFieldType); elem != nil {
+							actualSourceType = elem
 						}
-
-						if targetFieldType.Kind == analyze.TypeKindSlice && targetFieldType.ElemType != nil {
-							actualTargetType = targetFieldType.ElemType
+						if elem := r.collectionElem(targetFieldType); elem != nil {
+							actualTargetType = elem
 						}
 					}
 

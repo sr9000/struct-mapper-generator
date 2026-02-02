@@ -29,6 +29,7 @@ const (
 	TypeKindStruct            // struct type
 	TypeKindPointer           // pointer to another type
 	TypeKindSlice             // slice of another type
+	TypeKindArray             // array of another type
 	TypeKindAlias             // type alias (named type wrapping another)
 	TypeKindExternal          // external/opaque type (e.g., time.Time)
 )
@@ -44,6 +45,8 @@ func (k TypeKind) String() string {
 		return "pointer"
 	case TypeKindSlice:
 		return "slice"
+	case TypeKindArray:
+		return "array"
 	case TypeKindAlias:
 		return "alias"
 	case TypeKindExternal:

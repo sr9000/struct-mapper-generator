@@ -1,0 +1,20 @@
+version: 1
+
+types:
+  - from: caster-generator/examples/nested-mixed.APIOrder
+    to: caster-generator/examples/nested-mixed.DomainOrder
+    fields:
+      - target: ID
+        source: ID
+      - target: Lines
+        source: Items
+        hint: dive
+  - from: caster-generator/examples/nested-mixed.APIItem
+    to: caster-generator/examples/nested-mixed.DomainLine
+    fields:
+      - target: SKU
+        source: SKU
+      - target: Qty
+        source: Quantity
+      - target: NoteText
+        source: Note

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/types"
 
+	"caster-generator/internal/analyze"
 	"caster-generator/internal/mapping"
 )
 
@@ -92,14 +93,25 @@ func (r *Resolver) deduceRequiresTypes(plan *ResolvedMappingPlan) {
 				// Check Extra in matching mapping for the current requirement name
 				for _, extra := range matchingMapping.Extra {
 					if extra.Name == req.Name {
-						// Found matching extra!
-						srcPath, err := mapping.ParsePath(extra.Def.Source)
-						if err != nil {
-							continue
+						var fieldType *analyze.TypeInfo
+						var originDesc string
+
+						if extra.Def.Source != "" {
+							// Try to resolve from source
+							srcPath, err := mapping.ParsePath(extra.Def.Source)
+							if err == nil {
+								fieldType = r.resolveFieldType(srcPath, usage.Parent.SourceType)
+								originDesc = fmt.Sprintf("mapping %s->%s source field %s", usage.Parent.SourceType.ID, usage.Parent.TargetType.ID, extra.Def.Source)
+							}
+						} else if extra.Def.Target != "" {
+							// Try to resolve from target
+							tgtPath, err := mapping.ParsePath(extra.Def.Target)
+							if err == nil {
+								fieldType = r.resolveFieldType(tgtPath, usage.Parent.TargetType)
+								originDesc = fmt.Sprintf("mapping %s->%s target field %s", usage.Parent.SourceType.ID, usage.Parent.TargetType.ID, extra.Def.Target)
+							}
 						}
 
-						// Resolve type in parent source
-						fieldType := r.resolveFieldType(srcPath, usage.Parent.SourceType)
 						if fieldType == nil || fieldType.GoType == nil {
 							continue
 						}
@@ -107,7 +119,7 @@ func (r *Resolver) deduceRequiresTypes(plan *ResolvedMappingPlan) {
 						typeStr := types.TypeString(fieldType.GoType, nil)
 						candidates = append(candidates, DeducedType{
 							TypeStr: typeStr,
-							Source:  fmt.Sprintf("mapping %s->%s field %s", usage.Parent.SourceType.ID, usage.Parent.TargetType.ID, matchingMapping.TargetPaths[0]),
+							Source:  originDesc,
 						})
 					}
 				}

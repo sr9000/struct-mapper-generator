@@ -303,7 +303,7 @@ func (g *Generator) buildAssignment(
 	}
 
 	targetField := g.targetFieldExpr(m.TargetPaths)
-	sourceExpr := g.sourceFieldExpr(m.SourcePaths, m)
+	sourceExpr := g.sourceFieldExpr(m.SourcePaths, m, pair)
 
 	comment := ""
 	if g.config.GenerateComments && m.Explanation != "" {
@@ -351,7 +351,7 @@ func (g *Generator) applyConversionStrategy(
 		g.applyNestedCastStrategy(assignment, m, pair)
 
 	case plan.StrategyTransform:
-		g.applyTransformStrategy(assignment, m)
+		g.applyTransformStrategy(assignment, m, pair)
 
 	case plan.StrategyDefault:
 		if m.Default != nil {
@@ -395,7 +395,7 @@ func (g *Generator) applyPointerWrapStrategy(
 ) {
 	if len(m.SourcePaths) > 0 {
 		typeStr := g.getFieldTypeString(pair.SourceType, m.SourcePaths[0].String(), imports)
-		srcExpr := g.sourceFieldExpr(m.SourcePaths, m)
+		srcExpr := g.sourceFieldExpr(m.SourcePaths, m, pair)
 		assignment.SourceExpr = fmt.Sprintf("func() *%s { v := %s; return &v }()", typeStr, srcExpr)
 	}
 }
@@ -419,9 +419,9 @@ func (g *Generator) applyNestedCastStrategy(
 	}
 }
 
-func (g *Generator) applyTransformStrategy(assignment *assignmentData, m *plan.ResolvedFieldMapping) {
+func (g *Generator) applyTransformStrategy(assignment *assignmentData, m *plan.ResolvedFieldMapping, pair *plan.ResolvedTypePair) {
 	if m.Transform != "" {
-		args := g.buildTransformArgs(m.SourcePaths)
+		args := g.buildTransformArgs(m.SourcePaths, pair)
 		assignment.SourceExpr = fmt.Sprintf("%s(%s)", m.Transform, args)
 	}
 }
@@ -436,13 +436,21 @@ func (g *Generator) targetFieldExpr(paths []mapping.FieldPath) string {
 }
 
 // sourceFieldExpr builds the source field expression.
-func (g *Generator) sourceFieldExpr(paths []mapping.FieldPath, m *plan.ResolvedFieldMapping) string {
+func (g *Generator) sourceFieldExpr(paths []mapping.FieldPath, m *plan.ResolvedFieldMapping, pair *plan.ResolvedTypePair) string {
 	if len(paths) == 0 {
 		if m.Default != nil {
 			return *m.Default
 		}
 
 		return ""
+	}
+
+	// Check if this path refers to a required argument
+	firstSegment := paths[0].Segments[0].Name
+	for _, req := range pair.Requires {
+		if req.Name == firstSegment {
+			return paths[0].String()
+		}
 	}
 
 	return "in." + paths[0].String()
@@ -536,11 +544,27 @@ func (g *Generator) buildElementConversion(
 }
 
 // buildTransformArgs builds the argument list for a transform function call.
-func (g *Generator) buildTransformArgs(paths []mapping.FieldPath) string {
+func (g *Generator) buildTransformArgs(paths []mapping.FieldPath, pair *plan.ResolvedTypePair) string {
 	args := make([]string, 0, len(paths))
 
 	for _, p := range paths {
-		args = append(args, "in."+p.String())
+		// Check if this path refers to a required argument
+		isReq := false
+		if len(p.Segments) > 0 {
+			firstSegment := p.Segments[0].Name
+			for _, req := range pair.Requires {
+				if req.Name == firstSegment {
+					isReq = true
+					break
+				}
+			}
+		}
+
+		if isReq {
+			args = append(args, p.String())
+		} else {
+			args = append(args, "in."+p.String())
+		}
 	}
 
 	return strings.Join(args, ", ")

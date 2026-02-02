@@ -37,7 +37,7 @@ mappings:
       target: caster-generator/examples/nested.DomainLineItem
       requires:
         - name: OrderID
-          type: interface{}
+          type: uint
       "121":
         Name: ProductName
         Quantity: Qty

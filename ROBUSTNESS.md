@@ -42,7 +42,7 @@ This document tracks robustness work as a checkbox list, similar to `PLAN.md`.
 - [x] Restore / implement `internal/mapping.Validate()` so `gen` and `check` can validate YAML against code
 - [x] Provide a shared `mapping.ResolveTypeID()` used by both validation and transform registry
 - [ ] Expand validation to cover:
-  - [ ] transforms referenced by mappings exist in registry
+  - [x] transforms referenced by mappings exist in registry
   - [ ] `requires` referenced by `extra` are declared
 
 ### Workflow automation: examples + script
@@ -103,6 +103,7 @@ This document tracks robustness work as a checkbox list, similar to `PLAN.md`.
 - `internal/mapping/validate.go`
   - Implemented `mapping.Validate(...)` and `ValidationResult` (required by `gen` and `check`).
   - Implemented `mapping.ResolveTypeID(...)` and switched transform registry to use it.
+  - Validation now errors if a field mapping references an undeclared `transform:`.
 
 ---
 

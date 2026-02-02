@@ -121,7 +121,9 @@ mappings:
 	result := Validate(mf, graph)
 
 	assert.False(t, result.IsValid())
-	assert.Contains(t, result.Error().Error(), "NonExistent")
+	valErr := result.Error()
+	require.Error(t, valErr)
+	assert.Contains(t, valErr.Error(), "NonExistent")
 }
 
 func TestValidate_MissingSourceType(t *testing.T) {
@@ -174,7 +176,9 @@ mappings:
 	result := Validate(mf, graph)
 
 	assert.False(t, result.IsValid())
-	assert.Contains(t, result.Error().Error(), "NonExistentField")
+	valErr := result.Error()
+	require.Error(t, valErr)
+	assert.Contains(t, valErr.Error(), "NonExistentField")
 }
 
 func TestValidate_InvalidTargetField(t *testing.T) {
@@ -193,7 +197,9 @@ mappings:
 	result := Validate(mf, graph)
 
 	assert.False(t, result.IsValid())
-	assert.Contains(t, result.Error().Error(), "NonExistentField")
+	valErr := result.Error()
+	require.Error(t, valErr)
+	assert.Contains(t, valErr.Error(), "NonExistentField")
 }
 
 func TestValidate_UnexportedField(t *testing.T) {
@@ -212,7 +218,9 @@ mappings:
 	result := Validate(mf, graph)
 
 	assert.False(t, result.IsValid())
-	assert.Contains(t, result.Error().Error(), "not exported")
+	valErr := result.Error()
+	require.Error(t, valErr)
+	assert.Contains(t, valErr.Error(), "not exported")
 }
 
 func TestValidate_NestedPath(t *testing.T) {
@@ -234,25 +242,6 @@ mappings:
 	assert.True(t, result.IsValid(), "errors: %v", result.Errors)
 }
 
-func TestValidate_AllowMissingTransform(t *testing.T) {
-	yaml := `
-mappings:
-  - source: store.Order
-    target: warehouse.Order
-    fields:
-      - target: ID
-        source: OrderID
-        transform: NonExistentTransform
-`
-	mf, err := Parse([]byte(yaml))
-	require.NoError(t, err)
-
-	graph := buildTestTypeGraph()
-	result := Validate(mf, graph)
-
-	assert.True(t, result.IsValid())
-}
-
 func TestValidate_DuplicateTransform(t *testing.T) {
 	yaml := `
 mappings: []
@@ -271,7 +260,9 @@ transforms:
 	result := Validate(mf, graph)
 
 	assert.False(t, result.IsValid())
-	assert.Contains(t, result.Error().Error(), "duplicate transform")
+	valErr := result.Error()
+	require.Error(t, valErr)
+	assert.Contains(t, valErr.Error(), "duplicate transform")
 }
 
 func TestValidate_FieldMappingWithIgnore(t *testing.T) {
@@ -306,7 +297,9 @@ mappings:
 	result := Validate(mf, graph)
 
 	assert.False(t, result.IsValid())
-	assert.Contains(t, result.Error().Error(), "must specify")
+	valErr := result.Error()
+	require.Error(t, valErr)
+	assert.Contains(t, valErr.Error(), "must specify")
 }
 
 func TestValidate_IgnoreList(t *testing.T) {
@@ -396,8 +389,10 @@ mappings:
 
 	// many:1 requires transform
 	assert.False(t, result.IsValid())
-	assert.Contains(t, result.Error().Error(), "N:1")
-	assert.Contains(t, result.Error().Error(), "transform")
+	valErr := result.Error()
+	require.Error(t, valErr)
+	assert.Contains(t, valErr.Error(), "N:1")
+	assert.Contains(t, valErr.Error(), "transform")
 }
 
 func TestValidate_ManyToOneWithTransform(t *testing.T) {
@@ -439,4 +434,72 @@ mappings:
 	result := Validate(mf, graph)
 
 	assert.True(t, result.IsValid(), "errors: %v", result.Errors)
+}
+
+func TestValidate_NeedsTransformButTransformMissing(t *testing.T) {
+	yaml := `
+mappings:
+  - source: store.Order
+    target: warehouse.Order
+    fields:
+      - target: DisplayName
+        source: [FirstName, LastName]
+transforms: []
+`
+	mf, err := Parse([]byte(yaml))
+	require.NoError(t, err)
+
+	graph := buildTestTypeGraph()
+	result := Validate(mf, graph)
+
+	assert.False(t, result.IsValid())
+	valErr := result.Error()
+	require.Error(t, valErr)
+	assert.Contains(t, valErr.Error(), "requires transform")
+}
+
+func TestValidate_NeedsTransformButTransformNonExistent(t *testing.T) {
+	yaml := `
+mappings:
+  - source: store.Order
+    target: warehouse.Order
+    fields:
+      - target: ID
+        source: OrderID
+        transform: NonExistentTransform
+transforms: []
+ `
+	mf, err := Parse([]byte(yaml))
+	require.NoError(t, err)
+
+	graph := buildTestTypeGraph()
+	result := Validate(mf, graph)
+
+	assert.False(t, result.IsValid())
+	valErr := result.Error()
+	require.Error(t, valErr)
+	assert.Contains(t, valErr.Error(), "NonExistentTransform")
+}
+
+func TestValidate_KnownTransformReferenceOK(t *testing.T) {
+	yaml := `
+mappings:
+  - source: store.Order
+    target: warehouse.Order
+    fields:
+      - target: DisplayName
+        source: [FirstName, LastName]
+        transform: JoinName
+transforms:
+  - name: JoinName
+    source_type: string
+    target_type: string
+`
+	mf, err := Parse([]byte(yaml))
+	require.NoError(t, err)
+
+	graph := buildTestTypeGraph()
+	result := Validate(mf, graph)
+
+	assert.True(t, result.IsValid(), "expected valid mapping, got errors: %v", result.Errors)
 }

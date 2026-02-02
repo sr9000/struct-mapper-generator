@@ -33,6 +33,7 @@ func (e ValidationError) Error() string {
 	if len(prefix) > 0 {
 		return strings.Join(prefix, " ") + ": " + e.Message
 	}
+
 	return e.Message
 }
 
@@ -125,7 +126,7 @@ func Validate(mf *MappingFile, graph *analyze.TypeGraph) *ValidationResult {
 
 		// fields + auto
 		for _, fm := range append(append([]FieldMapping{}, tm.Fields...), tm.Auto...) {
-			validateFieldMapping(res, tpStr, srcT, dstT, &fm)
+			validateFieldMapping(res, tpStr, srcT, dstT, &fm, seenTransforms)
 		}
 
 		// ignore paths
@@ -139,7 +140,13 @@ func Validate(mf *MappingFile, graph *analyze.TypeGraph) *ValidationResult {
 	return res
 }
 
-func validateFieldMapping(res *ValidationResult, typePairStr string, srcT, dstT *analyze.TypeInfo, fm *FieldMapping) {
+func validateFieldMapping(
+	res *ValidationResult,
+	typePairStr string,
+	srcT, dstT *analyze.TypeInfo,
+	fm *FieldMapping,
+	knownTransforms map[string]struct{},
+) {
 	if fm == nil {
 		return
 	}
@@ -183,6 +190,13 @@ func validateFieldMapping(res *ValidationResult, typePairStr string, srcT, dstT 
 	// many:1 and many:many require a transform
 	if fm.NeedsTransform() && fm.Transform == "" {
 		res.addError(typePairStr, "", fmt.Sprintf("%s mapping requires transform", card.String()))
+	}
+
+	// A referenced transform must exist in the registry.
+	if fm.Transform != "" {
+		if _, ok := knownTransforms[fm.Transform]; !ok {
+			res.addError(typePairStr, "", fmt.Sprintf("referenced transform %q is not declared in transforms", fm.Transform))
+		}
 	}
 
 	// validate extra definitions
@@ -270,7 +284,7 @@ func validatePathAgainstType(pathStr string, typeInfo *analyze.TypeInfo) error {
 // ResolveTypeID resolves a type ID string like:
 // - "store.Order" (short)
 // - "caster-generator/store.Order" (full)
-// - "Order" (name only)
+// - "Order" (name only).
 func ResolveTypeID(typeIDStr string, graph *analyze.TypeGraph) *analyze.TypeInfo {
 	if graph == nil {
 		return nil
@@ -287,6 +301,7 @@ func ResolveTypeID(typeIDStr string, graph *analyze.TypeGraph) *analyze.TypeInfo
 				return t
 			}
 		}
+
 		return nil
 	}
 

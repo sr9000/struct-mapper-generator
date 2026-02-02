@@ -28,16 +28,16 @@ lint:
 
 ## test: Run all tests with race detection
 test:
-	go test -race ./...
+	go test -race ./internal/...
 
 ## cover: Run tests with coverage and open HTML report
 cover:
-	go test -coverprofile=coverage.out ./...
+	go test -coverprofile=coverage.out ./internal/...
 	go tool cover -html=coverage.out
 
 ## bench: Run benchmarks
 bench:
-	go test -bench=. ./... -run=^$$
+	go test -bench=. ./internal/...
 
 ## clean: Clean test cache and built binary
 clean:

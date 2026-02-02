@@ -10,7 +10,11 @@ Imagine you have two toy boxes:
 
 **caster-generator** helps you move toys from Box A to Box B automatically! ✨
 
-In programmer talk: it generates code to convert one Go struct to another.
+In programmer talk: it generates code to convert one Go struct to another. It handles:
+- Nested structs
+- Slices and Arrays
+- Pointers (including nil checks)
+- Recursive types (safe cycle detection)
 
 ---
 
@@ -56,11 +60,11 @@ Shows you all the structs (toy boxes) in your packages.
 ./caster-generator analyze -pkg ./mypackage
 ```
 
-| Option | What It Does |
-|--------|--------------|
-| `-pkg` | Which package to look at (you can use this many times!) |
-| `-type` | Only show one specific struct |
-| `-verbose` | Show extra details like tags |
+| Option     | What It Does                                            |
+|------------|---------------------------------------------------------|
+| `-pkg`     | Which package to look at (you can use this many times!) |
+| `-type`    | Only show one specific struct                           |
+| `-verbose` | Show extra details like tags                            |
 
 **Example:**
 ```bash
@@ -76,13 +80,17 @@ Creates a YAML file with mapping suggestions!
 ./caster-generator suggest -from store.Order -to warehouse.Order -out mapping.yaml
 ```
 
-| Option | What It Does |
-|--------|--------------|
-| `-from` | Source struct (where toys come FROM) |
-| `-to` | Target struct (where toys go TO) |
-| `-out` | Where to save the YAML file |
-| `-pkg` | Extra packages to load (optional) |
-| `-min-confidence` | How sure it needs to be (default: 0.7 = 70%) |
+| Option                 | What It Does                                             |
+|------------------------|----------------------------------------------------------|
+| `-from`                | Source struct (where toys come FROM)                     |
+| `-to`                  | Target struct (where toys go TO)                         |
+| `-out`                 | Where to save the YAML file                              |
+| `-pkg`                 | Extra packages to load (optional)                        |
+| `-mapping`             | Path to existing YAML mapping file to improve            |
+| `-min-confidence`      | How sure it needs to be (default: 0.7 = 70%)             |
+| `-min-gap`             | Minimum score gap between top candidates (default: 0.15) |
+| `-ambiguity-threshold` | Threshold for marking ambiguity (default: 0.1)           |
+| `-max-candidates`      | Max candidates to show in comments (default: 5)          |
 
 **Example:**
 ```bash
@@ -98,14 +106,14 @@ Creates actual Go code files!
 ./caster-generator gen -mapping mapping.yaml -out ./generated
 ```
 
-| Option | What It Does |
-|--------|--------------|
-| `-mapping` | Your YAML mapping file (required!) |
-| `-out` | Where to put generated files (default: `./generated`) |
-| `-package` | Package name for generated code (default: `casters`) |
-| `-pkg` | Extra packages to load (optional) |
-| `-strict` | Stop if any field can't be mapped |
-| `-write-suggestions` | Save suggestions to another file |
+| Option               | What It Does                                          |
+|----------------------|-------------------------------------------------------|
+| `-mapping`           | Your YAML mapping file (required!)                    |
+| `-out`               | Where to put generated files (default: `./generated`) |
+| `-package`           | Package name for generated code (default: `casters`)  |
+| `-pkg`               | Extra packages to load (optional)                     |
+| `-strict`            | Stop if any field can't be mapped                     |
+| `-write-suggestions` | Save suggestions to another file                      |
 
 **Example:**
 ```bash
@@ -121,15 +129,24 @@ Makes sure your mapping file still works with your code!
 ./caster-generator check -mapping mapping.yaml
 ```
 
-| Option | What It Does |
-|--------|--------------|
+| Option     | What It Does                       |
+|------------|------------------------------------|
 | `-mapping` | Your YAML mapping file (required!) |
-| `-pkg` | Extra packages to load (optional) |
-| `-strict` | Fail if any field is unmapped |
+| `-pkg`     | Extra packages to load (optional)  |
+| `-strict`  | Fail if any field is unmapped      |
 
 **Example:**
 ```bash
 ./caster-generator check -mapping mapping.yaml -strict
+```
+
+---
+
+### `version` - Check Version
+Prints the version information.
+
+```bash
+./caster-generator version
 ```
 
 ---
@@ -157,14 +174,14 @@ mappings:
 
 ### YAML Sections Explained:
 
-| Section | What It Does |
-|---------|--------------|
-| `source` | The struct you're copying FROM |
-| `target` | The struct you're copying TO |
-| `121` | Simple field mappings (source field → target field) |
-| `fields` | Complex mappings (when you need transforms) |
-| `ignore` | Fields to skip |
-| `auto` | Automatically matched fields |
+| Section  | What It Does                                        |
+|----------|-----------------------------------------------------|
+| `source` | The struct you're copying FROM                      |
+| `target` | The struct you're copying TO                        |
+| `121`    | Simple field mappings (source field → target field) |
+| `fields` | Complex mappings (when you need transforms)         |
+| `ignore` | Fields to skip                                      |
+| `auto`   | Automatically matched fields                        |
 
 ---
 
@@ -248,7 +265,7 @@ A: The tool handles basic conversions (like `int` to `int64`). For complex conve
 A: It will be marked as "unmapped" in the diagnostics. You can ignore it or map it manually.
 
 **Q: Can I use this with nested structs?**  
-A: Yes! It handles nested structs and slices automatically.
+A: Yes! It handles nested structs, slices, arrays, and even recursive types automatically.
 
 **Q: What if I change my structs later?**  
 A: Run `check` to find what broke, then regenerate!
@@ -716,6 +733,9 @@ mappings:
       - target: FieldName           # Single field
         source: SourceField         # Single source
         transform: TransformFunc    # Optional transform
+        extra:                      # Pass extra fields to transform
+          - DependencyField
+
         
       - target: [Field1, Field2]    # Multiple targets
         source: SingleSource        # 1:N mapping

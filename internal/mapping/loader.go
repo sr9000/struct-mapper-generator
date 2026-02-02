@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"caster-generator/internal/common"
 )
 
 // LoadFile loads and parses a YAML mapping file from the given path.
@@ -100,26 +102,26 @@ func (s StringOrArray) MarshalYAML() (any, error) {
 
 // First returns the first element or empty string if empty.
 func (s StringOrArray) First() string {
-	if len(s) == 0 {
-		return ""
+	if v, ok := common.First(s); ok {
+		return v
 	}
 
-	return s[0]
+	return ""
 }
 
 // IsEmpty returns true if the array is empty.
 func (s StringOrArray) IsEmpty() bool {
-	return len(s) == 0
+	return common.IsEmpty(s)
 }
 
 // IsSingle returns true if the array has exactly one element.
 func (s StringOrArray) IsSingle() bool {
-	return len(s) == 1
+	return common.IsSingle(s)
 }
 
 // IsMultiple returns true if the array has more than one element.
 func (s StringOrArray) IsMultiple() bool {
-	return len(s) > 1
+	return common.IsMultiple(s)
 }
 
 // Contains returns true if the array contains the given string.

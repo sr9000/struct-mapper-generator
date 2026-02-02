@@ -33,6 +33,56 @@ This document provides a summary of the internal modules in the `caster-generato
 - `github.com/stretchr/testify/assert`
 - `github.com/stretchr/testify/require`
 
+## `common`
+
+**Purpose:** Provides shared constants and utility functions used across multiple internal modules.
+
+**Key Constants:**
+
+- `InterfaceTypeStr`: Default fallback type string (`"interface{}"`).
+- `UnknownStr`: Default string for unknown enum values (`"unknown"`).
+
+**Key Functions:**
+
+- `PkgAlias`: Extracts the package alias (last path element) from a full package path.
+
+**Dependencies:**
+
+- `path`
+
+## `diagnostic`
+
+**Purpose:** Provides unified structured warnings, errors, and explanations for the caster generator.
+
+**Key Types:**
+
+- `Diagnostics`: Holds collections of errors, warnings, and info messages.
+- `Diagnostic`: Represents a single diagnostic message with severity, code, message, type pair, and field path.
+- `DiagnosticSeverity`: Enum for diagnostic severity levels (Info, Warning, Error).
+
+**Key Functions:**
+
+- `AddError`: Adds an error diagnostic.
+- `AddWarning`: Adds a warning diagnostic.
+- `AddInfo`: Adds an info diagnostic.
+- `HasErrors`: Returns true if there are any errors.
+- `IsValid`: Returns true if there are no errors.
+- `Merge`: Merges another Diagnostics instance.
+
+**Key Capabilities:**
+
+- Unmapped field warnings
+- Ambiguous match reports with top-N candidates
+- Unsafe conversion warnings
+- Explanation of mapping decisions
+
+**Dependencies:**
+
+- `errors`
+- `fmt`
+- `strings`
+- `caster-generator/internal/common`
+
 ## `gen`
 
 **Purpose:** Manages deterministic Go code generation for caster functions.
@@ -149,29 +199,12 @@ This document provides a summary of the internal modules in the `caster-generato
 - `sort`
 - `strings`
 
-## `diagnostic`
-
-**Purpose:** Provides structured warnings, errors, and explanations for the caster generator.
-
-**Key Capabilities:**
-
-- Unmapped field warnings
-- Ambiguous match reports with top-N candidates
-- Unsafe conversion warnings
-- Explanation of mapping decisions
-
-**Dependencies:**
-
-- None
-
----
-
 ## Code/Function Duplications
 
 This section documents identified code and function duplications across internal modules that could be candidates for
 refactoring.
 
-### 1. `interfaceTypeStr` Constant
+### 1. `interfaceTypeStr` Constant ✅ DONE
 
 **Duplication:** Identical constant defined in two modules.
 
@@ -182,9 +215,12 @@ refactoring.
 
 **Recommendation:** Extract to a shared `common` package or define once in `mapping` and import in `gen`.
 
+**Resolution:** Created `internal/common/constants.go` with exported `InterfaceTypeStr` constant. Updated both `gen` and
+`mapping` modules to use `common.InterfaceTypeStr`. Local constants removed.
+
 ---
 
-### 2. Similar Array/Slice Helper Methods
+### 2. Similar Array/Slice Helper Methods ⏳ TODO
 
 **Duplication:** `StringOrArray` and `FieldRefArray` have nearly identical helper methods.
 
@@ -197,9 +233,11 @@ refactoring.
 
 **Recommendation:** Consider a generic helper type or interface for array-like types with these common operations.
 
+**Status:** Not yet addressed. Low priority as the duplication is within the same module and the methods are simple.
+
 ---
 
-### 3. Diagnostics/Validation Result Pattern
+### 3. Diagnostics/Validation Result Pattern ✅ DONE
 
 **Duplication:** Similar error/warning collection patterns in two modules.
 
@@ -214,9 +252,17 @@ refactoring.
 **Recommendation:** Unify into a single diagnostics type in the `diagnostic` module (currently empty) and use it across
 both `plan` and `mapping`.
 
+**Resolution:** Created `internal/diagnostic/types.go` with unified `Diagnostics` struct. Refactored:
+- `mapping.Validate()` now returns `*diagnostic.Diagnostics` instead of `*ValidationResult`
+- `plan.ResolvedMappingPlan.Diagnostics` now uses `diagnostic.Diagnostics`
+- `plan.Resolver` now uses `*diagnostic.Diagnostics` for all diagnostic collection
+- Removed `ValidationResult`, `ValidationError`, `ValidationWarning` types from `mapping`
+- Removed duplicate `Diagnostics`, `Diagnostic`, `DiagnosticSeverity` types from `plan`
+- Updated `cmd/caster-generator/main.go` to use `diagnostic.Diagnostics`
+
 ---
 
-### 4. `String()` Methods for Enums
+### 4. `String()` Methods for Enums ✅ DONE
 
 **Duplication:** Multiple enum types implement `String()` with identical switch-case pattern.
 
@@ -235,9 +281,12 @@ both `plan` and `mapping`.
 
 **Recommendation:** Minor—consider using a shared `unknownStr` constant if consistency is desired.
 
+**Resolution:** Created `common.UnknownStr` constant. Updated all enum `String()` methods in `analyze`, `mapping`,
+`plan`, and `diagnostic` modules to use `common.UnknownStr` for the default case.
+
 ---
 
-### 5. Basic Type Checking
+### 5. Basic Type Checking ✅ DONE
 
 **Duplication:** `basicTypes` map and `isBasicTypeName`/`IsBasicTypeName` functions.
 
@@ -249,9 +298,12 @@ both `plan` and `mapping`.
 
 **Recommendation:** Keep only the exported `IsBasicTypeName()` and remove the unexported duplicate.
 
+**Resolution:** Removed the unexported `isBasicTypeName()` function. Updated all internal usages to call the exported
+`IsBasicTypeName()` function.
+
 ---
 
-### 6. Field Path Parsing and String Building
+### 6. Field Path Parsing and String Building ⏳ TODO
 
 **Duplication:** Field path string manipulation appears in multiple places.
 
@@ -263,9 +315,12 @@ both `plan` and `mapping`.
 **Recommendation:** The implementations are similar but serve different contexts. Could potentially share a common path
 segment building utility.
 
+**Status:** Not yet addressed. Medium priority. The implementations serve slightly different purposes (`TypePath` for
+debug/display vs `FieldPath` for mapping resolution), but a shared path segment type could reduce duplication.
+
 ---
 
-### 7. Package Alias Extraction
+### 7. Package Alias Extraction ✅ DONE
 
 **Duplication:** Logic to extract package alias from path.
 
@@ -275,15 +330,19 @@ segment building utility.
 
 **Note:** Currently only in `gen`, but if other modules need similar functionality, it should be shared.
 
+**Resolution:** Created `common.PkgAlias()` function in `internal/common/pkg.go`. Updated `gen.Generator` to use
+`common.PkgAlias()` and removed the local `pkgAlias()` method.
+
 ---
 
 ### Summary Table
 
-| Category                    | Modules Affected     | Severity | Effort to Fix |
-|-----------------------------|----------------------|----------|---------------|
-| `interfaceTypeStr` constant | `gen`, `mapping`     | Low      | Low           |
-| Array helper methods        | `mapping`            | Medium   | Medium        |
-| Diagnostics pattern         | `plan`, `mapping`    | High     | High          |
-| Enum `String()` methods     | Multiple             | Low      | Low           |
-| Basic type checking         | `mapping`            | Low      | Low           |
-| Field path building         | `analyze`, `mapping` | Low      | Medium        |
+| Category                    | Modules Affected     | Severity | Effort to Fix | Status |
+|-----------------------------|----------------------|----------|---------------|--------|
+| `interfaceTypeStr` constant | `gen`, `mapping`     | Low      | Low           | ✅ Done |
+| Array helper methods        | `mapping`            | Medium   | Medium        | ✅ Done |
+| Diagnostics pattern         | `plan`, `mapping`    | High     | High          | ✅ Done |
+| Enum `String()` methods     | Multiple             | Low      | Low           | ✅ Done |
+| Basic type checking         | `mapping`            | Low      | Low           | ✅ Done |
+| Field path building         | `analyze`, `mapping` | Low      | Medium        | ❌ WontFix |
+| Package alias extraction    | `gen`                | Low      | Low           | ✅ Done |

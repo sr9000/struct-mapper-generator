@@ -106,35 +106,33 @@ func (f FieldRefArray) Paths() []string {
 
 // First returns the first element's path or empty string if empty.
 func (f FieldRefArray) First() string {
-	if len(f) == 0 {
-		return ""
+	if v, ok := common.First(f); ok {
+		return v.Path
 	}
-
-	return f[0].Path
+	return ""
 }
 
 // FirstRef returns the first element or zero FieldRef if empty.
 func (f FieldRefArray) FirstRef() FieldRef {
-	if len(f) == 0 {
-		return FieldRef{}
+	if v, ok := common.First(f); ok {
+		return v
 	}
-
-	return f[0]
+	return FieldRef{}
 }
 
 // IsEmpty returns true if the array is empty.
 func (f FieldRefArray) IsEmpty() bool {
-	return len(f) == 0
+	return common.IsEmpty(f)
 }
 
 // IsSingle returns true if the array has exactly one element.
 func (f FieldRefArray) IsSingle() bool {
-	return len(f) == 1
+	return common.IsSingle(f)
 }
 
 // IsMultiple returns true if the array has more than one element.
 func (f FieldRefArray) IsMultiple() bool {
-	return len(f) > 1
+	return common.IsMultiple(f)
 }
 
 // HasAnyHint returns true if any field has a non-empty hint.
@@ -195,22 +193,35 @@ func (f FieldRefArray) GetEffectiveHint(targets FieldRefArray) IntrospectionHint
 	tgtCount := len(targets)
 
 	// 1:N - introspect source (first type)
-	if srcCount <= 1 && tgtCount > 1 {
+	if srcCount <= 1 {
+		if tgtCount > 1 {
+			if srcCount == 1 && f[0].Hint != HintNone {
+				return f[0].Hint
+			}
+			// Check targets for hints
+			for _, t := range targets {
+				if t.Hint != HintNone {
+					return t.Hint
+				}
+			}
+
+			return HintNone
+		}
+
+		// 1:1 - any hint applies (tgtCount <= 1)
 		if srcCount == 1 && f[0].Hint != HintNone {
 			return f[0].Hint
 		}
-		// Check targets for hints
-		for _, t := range targets {
-			if t.Hint != HintNone {
-				return t.Hint
-			}
+
+		if tgtCount == 1 && targets[0].Hint != HintNone {
+			return targets[0].Hint
 		}
 
 		return HintNone
 	}
 
 	// N:1 - introspect target (last type)
-	if srcCount > 1 && tgtCount <= 1 {
+	if tgtCount <= 1 {
 		if tgtCount == 1 && targets[0].Hint != HintNone {
 			return targets[0].Hint
 		}
@@ -219,19 +230,6 @@ func (f FieldRefArray) GetEffectiveHint(targets FieldRefArray) IntrospectionHint
 			if s.Hint != HintNone {
 				return s.Hint
 			}
-		}
-
-		return HintNone
-	}
-
-	// 1:1 - any hint applies
-	if srcCount <= 1 && tgtCount <= 1 {
-		if srcCount == 1 && f[0].Hint != HintNone {
-			return f[0].Hint
-		}
-
-		if tgtCount == 1 && targets[0].Hint != HintNone {
-			return targets[0].Hint
 		}
 
 		return HintNone
@@ -422,15 +420,15 @@ func (fm *FieldMapping) GetCardinality() Cardinality {
 	sourceCount := len(fm.Source)
 	targetCount := len(fm.Target)
 
-	if sourceCount <= 1 && targetCount <= 1 {
-		return CardinalityOneToOne
-	}
+	if sourceCount <= 1 {
+		if targetCount <= 1 {
+			return CardinalityOneToOne
+		}
 
-	if sourceCount <= 1 && targetCount > 1 {
 		return CardinalityOneToMany
 	}
 
-	if sourceCount > 1 && targetCount <= 1 {
+	if targetCount <= 1 {
 		return CardinalityManyToOne
 	}
 

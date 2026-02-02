@@ -44,10 +44,6 @@ type TypeMapping struct {
 	GenerateTarget bool `yaml:"generate_target,omitempty"`
 
 	// Fields defines explicit field mappings with full control.
-	// if it does not exist. The structure will be inferred from the mapping.
-	GenerateTarget bool `yaml:"generate_target,omitempty"`
-
-	// Fields defines explicit field mappings with full control.
 	// Supports 1:1, 1:many, many:1, and many:many with transforms.
 	// Priority: second highest (after 121).
 	Fields []FieldMapping `yaml:"fields,omitempty"`

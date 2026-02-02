@@ -327,7 +327,7 @@ func TestGenerator_Generate_WithTransform(t *testing.T) {
 	files, err := gen.Generate(resolvedPlan)
 
 	require.NoError(t, err)
-	require.Len(t, files, 1)
+	require.Len(t, files, 2) // caster file + missing_transforms.go
 
 	content := string(files[0].Content)
 	assert.Contains(t, content, "ConcatNames(in.FirstName, in.LastName)")
@@ -376,12 +376,16 @@ func TestGenerator_Generate_MissingTransformStubs(t *testing.T) {
 	files, err := gen.Generate(resolvedPlan)
 
 	require.NoError(t, err)
-	require.Len(t, files, 1)
+	require.Len(t, files, 2) // caster file + missing_transforms.go
 
-	content := string(files[0].Content)
-	assert.Contains(t, content, "out.CustomerID = ID2CustomerID(in.ID)")
-	assert.Contains(t, content, "func ID2CustomerID(v0 int64) string {")
-	assert.Contains(t, content, `panic("transform ID2CustomerID not implemented")`)
+	// First file is the caster
+	casterContent := string(files[0].Content)
+	assert.Contains(t, casterContent, "out.CustomerID = ID2CustomerID(in.ID)")
+
+	// Second file is the missing transforms
+	transformsContent := string(files[1].Content)
+	assert.Contains(t, transformsContent, "func ID2CustomerID(v0 int64) string {")
+	assert.Contains(t, transformsContent, `panic("transform ID2CustomerID not implemented")`)
 }
 
 func TestTypeRef_String(t *testing.T) {

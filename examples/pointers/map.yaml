@@ -1,0 +1,20 @@
+# This is a starter mapping fixture for the pointers example.
+# It intentionally focuses on pointer deref behavior.
+#
+# Usage (from repo root):
+#   go run ./cmd/caster-generator gen -mapping ./examples/pointers/map.yaml
+
+version: "1"
+
+mappings:
+  - source: caster-generator/examples/pointers.APIOrder
+    target: caster-generator/examples/pointers.DomainOrder
+    fields:
+      - source: LineItem.Price
+        target: LineItemPrice
+    auto:
+      - source: ID
+        target: ID
+    ignore:
+      - Items
+      - LineItem

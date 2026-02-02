@@ -87,6 +87,11 @@ func (g *Generator) generateTypePair(pair *plan.ResolvedTypePair) (*GeneratedFil
 	// Format the generated code
 	formatted, err := format.Source(buf.Bytes())
 	if err != nil {
+		// Best-effort: write unformatted code to a sidecar file to aid debugging.
+		// This is intentionally non-fatal for the write attempt.
+		if g.config.OutputDir != "" {
+			_ = writeDebugUnformatted(g.config.OutputDir, data.Filename, buf.Bytes())
+		}
 		// Return unformatted code for debugging
 		return &GeneratedFile{
 			Filename: data.Filename,
@@ -186,6 +191,8 @@ type assignmentData struct {
 	// For nil check wrapper
 	NeedsNilCheck bool
 	NilDefault    string
+	// For pointer nil check
+	NilCheckExpr string
 }
 
 // nestedCasterRef tracks a nested caster function that needs to be called.
@@ -383,8 +390,11 @@ func (g *Generator) applyPointerDerefStrategy(
 	pair *plan.ResolvedTypePair,
 ) {
 	assignment.NeedsNilCheck = true
-	assignment.SourceExpr = "*" + assignment.SourceExpr
+	// Keep the original pointer expression for the nil-check; use a dereferenced
+	// expression for the actual assignment.
 	assignment.NilDefault = g.zeroValue(pair.TargetType, m.TargetPaths)
+	assignment.NilCheckExpr = assignment.SourceExpr
+	assignment.SourceExpr = "*" + assignment.SourceExpr
 }
 
 func (g *Generator) applyPointerWrapStrategy(
@@ -415,6 +425,7 @@ func (g *Generator) applyNestedCastStrategy(
 	if srcType != nil && tgtType != nil {
 		casterName := g.nestedFunctionName(srcType, tgtType)
 		assignment.NestedCaster = casterName
+		// Always call the nested caster with the resolved source expression.
 		assignment.SourceExpr = fmt.Sprintf("%s(%s)", casterName, assignment.SourceExpr)
 	}
 }
@@ -917,8 +928,10 @@ func {{.FunctionName}}(in {{.SourceType}}{{range .ExtraArgs}}, {{.Name}} {{.Type
 {{range .Assignments}}
 {{if .Comment}}	// {{.Comment}}
 {{end}}{{if .IsSlice}}	{{.SliceBody}}
-{{else if .NeedsNilCheck}}	if {{.SourceExpr}} != nil {
-		{{.TargetField}} = *{{.SourceExpr}}
+{{else if .NeedsNilCheck}}	if ({{if .NilCheckExpr}}{{.NilCheckExpr}}{{else}}{{.SourceExpr}}{{end}}) != nil {
+		{{.TargetField}} = {{.SourceExpr}}
+	} else {
+		{{.TargetField}} = {{.NilDefault}}
 	}
 {{else}}	{{.TargetField}} = {{.SourceExpr}}
 {{end}}{{end}}

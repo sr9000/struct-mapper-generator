@@ -44,7 +44,7 @@ This document tracks robustness work as a checkbox list, similar to `PLAN.md`.
 ### Workflow automation: examples + script
 
 - [ ] Add more example fixtures under `examples/`:
-  - [ ] pointers
+  - [x] pointers
   - [ ] slices vs arrays (where supported)
   - [ ] recursive structs (cycle safety)
   - [ ] nested structs with mixed pointer/slice
@@ -100,6 +100,11 @@ This document tracks robustness work as a checkbox list, similar to `PLAN.md`.
   - Implemented `mapping.Validate(...)` and `ValidationResult` (required by `gen` and `check`).
   - Implemented `mapping.ResolveTypeID(...)` and switched transform registry to use it.
   - Validation now errors if a field mapping references an undeclared `transform:`.
+
+- `examples/pointers` + `internal/gen/pointers_integration_test.go`
+  - Added a pointer-focused example package and mapping fixture.
+  - Added an integration test that runs `gen` for the fixture and compiles the example package.
+  - Fixed codegen for pointer deref to emit safe nil-checks (and write an `.unformatted.go` sidecar on formatter failure to aid debugging).
 
 ---
 

@@ -118,29 +118,16 @@ func ExportSuggestionsYAMLWithConfig(plan *ResolvedMappingPlan, config ExportCon
 	root.Content = append(root.Content, mappingsKey, mappingsValue)
 
 	// Add transforms if present
-	if len(mf.Transforms) > 0 {
-		transformsKey := &yaml.Node{Kind: yaml.ScalarNode, Value: "transforms"}
-
-		transformsValue := &yaml.Node{Kind: yaml.SequenceNode}
-		for _, td := range mf.Transforms {
-			tdNode := &yaml.Node{Kind: yaml.MappingNode}
-
-			tdNode.Content = append(tdNode.Content,
-				&yaml.Node{Kind: yaml.ScalarNode, Value: "name"},
-				&yaml.Node{Kind: yaml.ScalarNode, Value: td.Name},
-			)
-			if td.Func != "" {
-				tdNode.Content = append(tdNode.Content,
-					&yaml.Node{Kind: yaml.ScalarNode, Value: "func"},
-					&yaml.Node{Kind: yaml.ScalarNode, Value: td.Func},
-				)
+	root.Content = appendNamedList(root.Content, "transforms", mf.Transforms,
+		func(t mapping.TransformDef) string { return t.Name },
+		func(t mapping.TransformDef) (string, string) {
+			if t.Func != "" {
+				return "func", t.Func
 			}
 
-			transformsValue.Content = append(transformsValue.Content, tdNode)
-		}
-
-		root.Content = append(root.Content, transformsKey, transformsValue)
-	}
+			return "", ""
+		},
+	)
 
 	return yaml.Marshal(root)
 }
@@ -183,36 +170,38 @@ func buildTypeMappingNode(tm *mapping.TypeMapping, resolvedTP *ResolvedTypePair,
 	)
 
 	// requires
-	if len(tm.Requires) > 0 {
-		requiresKey := &yaml.Node{Kind: yaml.ScalarNode, Value: "requires"}
-
-		requiresValue := &yaml.Node{Kind: yaml.SequenceNode}
-		for _, req := range tm.Requires {
-			reqNode := &yaml.Node{Kind: yaml.MappingNode}
-
-			reqNode.Content = append(reqNode.Content,
-				&yaml.Node{Kind: yaml.ScalarNode, Value: "name"},
-				&yaml.Node{Kind: yaml.ScalarNode, Value: req.Name},
-			)
-			if req.Type != "" {
-				reqNode.Content = append(reqNode.Content,
-					&yaml.Node{Kind: yaml.ScalarNode, Value: "type"},
-					&yaml.Node{Kind: yaml.ScalarNode, Value: req.Type},
-				)
+	node.Content = appendNamedList(node.Content, "requires", tm.Requires,
+		func(a mapping.ArgDef) string { return a.Name },
+		func(a mapping.ArgDef) (string, string) {
+			if a.Type != "" {
+				return "type", a.Type
 			}
 
-			requiresValue.Content = append(requiresValue.Content, reqNode)
-		}
-
-		node.Content = append(node.Content, requiresKey, requiresValue)
-	}
+			return "", ""
+		},
+	)
 
 	// 121
-	if len(tm.OneToOne) > 0 {
+	appendOneToOne(node, tm.OneToOne)
+
+	// fields
+	appendFields(node, tm.Fields)
+
+	// ignore
+	appendIgnore(node, tm.Ignore, resolvedTP, config)
+
+	// auto
+	appendAuto(node, tm.Auto, resolvedTP)
+
+	return node
+}
+
+func appendOneToOne(node *yaml.Node, oneToOne map[string]string) {
+	if len(oneToOne) > 0 {
 		oneToOneKey := &yaml.Node{Kind: yaml.ScalarNode, Value: "121"}
 
 		oneToOneValue := &yaml.Node{Kind: yaml.MappingNode}
-		for src, tgt := range tm.OneToOne {
+		for src, tgt := range oneToOne {
 			oneToOneValue.Content = append(oneToOneValue.Content,
 				&yaml.Node{Kind: yaml.ScalarNode, Value: src},
 				&yaml.Node{Kind: yaml.ScalarNode, Value: tgt},
@@ -221,22 +210,24 @@ func buildTypeMappingNode(tm *mapping.TypeMapping, resolvedTP *ResolvedTypePair,
 
 		node.Content = append(node.Content, oneToOneKey, oneToOneValue)
 	}
+}
 
-	// fields
-	if len(tm.Fields) > 0 {
+func appendFields(node *yaml.Node, fields []mapping.FieldMapping) {
+	if len(fields) > 0 {
 		fieldsKey := &yaml.Node{Kind: yaml.ScalarNode, Value: "fields"}
 		fieldsValue := &yaml.Node{Kind: yaml.SequenceNode}
 
-		for _, fm := range tm.Fields {
+		for _, fm := range fields {
 			fmNode := buildFieldMappingNode(&fm)
 			fieldsValue.Content = append(fieldsValue.Content, fmNode)
 		}
 
 		node.Content = append(node.Content, fieldsKey, fieldsValue)
 	}
+}
 
-	// ignore - add comments for why fields were ignored/rejected
-	if len(tm.Ignore) > 0 || (resolvedTP != nil && len(resolvedTP.UnmappedTargets) > 0 && config.IncludeRejectedComments) {
+func appendIgnore(node *yaml.Node, ignore []string, resolvedTP *ResolvedTypePair, config ExportConfig) {
+	if len(ignore) > 0 || (resolvedTP != nil && len(resolvedTP.UnmappedTargets) > 0 && config.IncludeRejectedComments) {
 		ignoreKey := &yaml.Node{Kind: yaml.ScalarNode, Value: "ignore"}
 		ignoreValue := &yaml.Node{Kind: yaml.SequenceNode}
 
@@ -246,7 +237,7 @@ func buildTypeMappingNode(tm *mapping.TypeMapping, resolvedTP *ResolvedTypePair,
 				config.MinConfidence, config.MinGap, config.AmbiguityThreshold)
 		}
 
-		for _, ignorePath := range tm.Ignore {
+		for _, ignorePath := range ignore {
 			ignoreNode := &yaml.Node{Kind: yaml.ScalarNode, Value: ignorePath}
 
 			// Find the corresponding unmapped field for comment
@@ -284,13 +275,14 @@ func buildTypeMappingNode(tm *mapping.TypeMapping, resolvedTP *ResolvedTypePair,
 
 		node.Content = append(node.Content, ignoreKey, ignoreValue)
 	}
+}
 
-	// auto - add comments with confidence scores
-	if len(tm.Auto) > 0 {
+func appendAuto(node *yaml.Node, auto []mapping.FieldMapping, resolvedTP *ResolvedTypePair) {
+	if len(auto) > 0 {
 		autoKey := &yaml.Node{Kind: yaml.ScalarNode, Value: "auto"}
 		autoValue := &yaml.Node{Kind: yaml.SequenceNode}
 
-		for _, fm := range tm.Auto {
+		for _, fm := range auto {
 			fmNode := buildFieldMappingNode(&fm)
 
 			// Add confidence comment if we have the resolved mapping info
@@ -312,8 +304,42 @@ func buildTypeMappingNode(tm *mapping.TypeMapping, resolvedTP *ResolvedTypePair,
 
 		node.Content = append(node.Content, autoKey, autoValue)
 	}
+}
 
-	return node
+func appendNamedList[T any](
+	parentContent []*yaml.Node,
+	key string,
+	items []T,
+	getName func(T) string,
+	getExtra func(T) (string, string)) []*yaml.Node {
+	if len(items) == 0 {
+		return parentContent
+	}
+
+	keyNode := &yaml.Node{Kind: yaml.ScalarNode, Value: key}
+	seqValue := &yaml.Node{Kind: yaml.SequenceNode}
+
+	for _, item := range items {
+		itemNode := &yaml.Node{Kind: yaml.MappingNode}
+
+		name := getName(item)
+		itemNode.Content = append(itemNode.Content,
+			&yaml.Node{Kind: yaml.ScalarNode, Value: "name"},
+			&yaml.Node{Kind: yaml.ScalarNode, Value: name},
+		)
+
+		extraKey, extraVal := getExtra(item)
+		if extraKey != "" && extraVal != "" {
+			itemNode.Content = append(itemNode.Content,
+				&yaml.Node{Kind: yaml.ScalarNode, Value: extraKey},
+				&yaml.Node{Kind: yaml.ScalarNode, Value: extraVal},
+			)
+		}
+
+		seqValue.Content = append(seqValue.Content, itemNode)
+	}
+
+	return append(parentContent, keyNode, seqValue)
 }
 
 // buildFieldMappingNode builds a yaml.Node for a FieldMapping.
@@ -453,13 +479,6 @@ func exportTypePairSuggestions(tp *ResolvedTypePair) mapping.TypeMapping {
 		Auto:     []mapping.FieldMapping{},
 	}
 
-	// Restore Requires field from original mapping if available
-	// Note: The current plan model doesn't store the original 'requires' field.
-	// We need to update the plan model or the resolver to pass this through.
-	// For now, if we had access to the original mapping definition, we could copy it.
-
-	// TODO: Pass Requires and Extra fields through ResolvedTypePair/ResolvedFieldMapping
-
 	for _, m := range tp.Mappings {
 		switch m.Source {
 		case MappingSourceYAML121:
@@ -469,11 +488,9 @@ func exportTypePairSuggestions(tp *ResolvedTypePair) mapping.TypeMapping {
 				fm := exportFieldMapping(&m)
 				fm.Transform = generatePlaceholderTransformName(m.SourcePaths, m.TargetPaths)
 				tm.Fields = append(tm.Fields, fm)
-			} else {
+			} else if len(m.SourcePaths) == 1 && len(m.TargetPaths) == 1 {
 				// Preserve as 121 mappings
-				if len(m.SourcePaths) == 1 && len(m.TargetPaths) == 1 {
-					tm.OneToOne[m.SourcePaths[0].String()] = m.TargetPaths[0].String()
-				}
+				tm.OneToOne[m.SourcePaths[0].String()] = m.TargetPaths[0].String()
 			}
 
 		case MappingSourceYAMLFields:

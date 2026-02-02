@@ -143,7 +143,9 @@ func validateFieldMapping(
 	// A referenced transform must exist in the registry.
 	if fm.Transform != "" {
 		if _, ok := knownTransforms[fm.Transform]; !ok {
-			res.AddError("unknown_transform", fmt.Sprintf("referenced transform %q is not declared in transforms", fm.Transform), typePairStr, "")
+			res.AddError("unknown_transform",
+				fmt.Sprintf("referenced transform %q is not declared in transforms", fm.Transform),
+				typePairStr, "")
 		}
 	}
 
@@ -166,7 +168,9 @@ func validateFieldMapping(
 			}
 
 			if !declared {
-				res.AddError("undeclared_extra_arg", fmt.Sprintf("extra %q references an undeclared requires arg; add it under requires: or rename", ev.Name), typePairStr, "")
+				res.AddError("undeclared_extra_arg",
+					fmt.Sprintf("extra %q references an undeclared requires arg; add it under requires: or rename", ev.Name),
+					typePairStr, "")
 			}
 		}
 

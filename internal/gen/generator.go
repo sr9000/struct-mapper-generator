@@ -786,12 +786,14 @@ func (g *Generator) identifyMissingTransforms(
 			// Also add 'extra' types if any
 			for _, exp := range m.Extra {
 				var typ string
-				if exp.Def.Source != "" {
+
+				switch {
+				case exp.Def.Source != "":
 					typ = g.getFieldTypeString(pair.SourceType, exp.Def.Source, imports)
-				} else if exp.Def.Target != "" {
+				case exp.Def.Target != "":
 					// Reference to target type field?
 					typ = g.getFieldTypeString(pair.TargetType, exp.Def.Target, imports)
-				} else {
+				default:
 					// Fallback
 					typ = "interface{}"
 				}

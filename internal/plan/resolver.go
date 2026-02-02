@@ -1,12 +1,12 @@
 package plan
 
 import (
-	"caster-generator/internal/diagnostic"
 	"errors"
 	"fmt"
 	"sort"
 
 	"caster-generator/internal/analyze"
+	"caster-generator/internal/diagnostic"
 	"caster-generator/internal/mapping"
 	"caster-generator/internal/match"
 )
@@ -468,93 +468,107 @@ func (r *Resolver) determineStrategyWithHint(
 	case match.TypeConvertible:
 		return StrategyConvert, "convertible"
 	case match.TypeNeedsTransform:
-		// Determine more specific strategy
-		if sourceFieldType.Kind == analyze.TypeKindPointer && targetFieldType.Kind != analyze.TypeKindPointer {
-			return StrategyPointerDeref, "pointer deref"
-		}
-
-		if sourceFieldType.Kind != analyze.TypeKindPointer && targetFieldType.Kind == analyze.TypeKindPointer {
-			return StrategyPointerWrap, "pointer wrap"
-		}
-
-		// Check for pointer-to-pointer struct conversions (e.g., *Node -> *NodeDTO)
-		if sourceFieldType.Kind == analyze.TypeKindPointer && targetFieldType.Kind == analyze.TypeKindPointer {
-			srcElem := sourceFieldType.ElemType
-
-			tgtElem := targetFieldType.ElemType
-			if srcElem != nil && tgtElem != nil &&
-				srcElem.Kind == analyze.TypeKindStruct && tgtElem.Kind == analyze.TypeKindStruct {
-				return StrategyPointerNestedCast, "pointer nested cast"
-			}
-		}
-
-		if sourceFieldType.Kind == analyze.TypeKindSlice && targetFieldType.Kind == analyze.TypeKindSlice {
-			// For slices, check if hint says dive (introspect elements) or final
-			if hint == mapping.HintDive {
-				return StrategySliceMap, explSliceMap + " (dive)"
-			}
-
-			return StrategySliceMap, explSliceMap
-		}
-
-		if sourceFieldType.Kind == analyze.TypeKindArray && targetFieldType.Kind == analyze.TypeKindArray {
-			// Arrays are treated like slices for mapping purposes (element-wise).
-			if hint == mapping.HintDive {
-				return StrategySliceMap, explSliceMap + " (dive, array)"
-			}
-
-			return StrategySliceMap, explSliceMap + " (array)"
-		}
-
-		if sourceFieldType.Kind == analyze.TypeKindStruct && targetFieldType.Kind == analyze.TypeKindStruct {
-			// For structs, check if hint says dive (recursively map fields) or final
-			if hint == mapping.HintDive {
-				return StrategyNestedCast, explNestedStruct + " (dive)"
-			}
-			// Default behavior: introspect structs unless marked final
-			return StrategyNestedCast, explNestedStruct
-		}
-
-		return StrategyTransform, "needs transform"
+		return r.determineNeedsTransformStrategy(sourceFieldType, targetFieldType, hint)
 	default:
-		// Check for pointer-to-pointer struct conversions (e.g., *Node -> *NodeDTO)
-		if sourceFieldType.Kind == analyze.TypeKindPointer && targetFieldType.Kind == analyze.TypeKindPointer {
-			srcElem := sourceFieldType.ElemType
-
-			tgtElem := targetFieldType.ElemType
-			if srcElem != nil && tgtElem != nil &&
-				srcElem.Kind == analyze.TypeKindStruct && tgtElem.Kind == analyze.TypeKindStruct {
-				return StrategyPointerNestedCast, "pointer nested cast"
-			}
-		}
-
-		// Also check for struct/slice even when marked as incompatible
-		if sourceFieldType.Kind == analyze.TypeKindStruct && targetFieldType.Kind == analyze.TypeKindStruct {
-			if hint == mapping.HintDive {
-				return StrategyNestedCast, explNestedStruct + " (dive)"
-			}
-
-			return StrategyNestedCast, explNestedStruct
-		}
-
-		if sourceFieldType.Kind == analyze.TypeKindSlice && targetFieldType.Kind == analyze.TypeKindSlice {
-			if hint == mapping.HintDive {
-				return StrategySliceMap, explSliceMap + " (dive)"
-			}
-
-			return StrategySliceMap, explSliceMap
-		}
-
-		if sourceFieldType.Kind == analyze.TypeKindArray && targetFieldType.Kind == analyze.TypeKindArray {
-			if hint == mapping.HintDive {
-				return StrategySliceMap, explSliceMap + " (dive, array)"
-			}
-
-			return StrategySliceMap, explSliceMap + " (array)"
-		}
-
-		return StrategyTransform, "incompatible"
+		return r.determineIncompatibleStrategy(sourceFieldType, targetFieldType, hint)
 	}
+}
+
+func (r *Resolver) determineNeedsTransformStrategy(
+	sourceFieldType, targetFieldType *analyze.TypeInfo,
+	hint mapping.IntrospectionHint,
+) (ConversionStrategy, string) {
+	// Determine more specific strategy
+	if sourceFieldType.Kind == analyze.TypeKindPointer && targetFieldType.Kind != analyze.TypeKindPointer {
+		return StrategyPointerDeref, "pointer deref"
+	}
+
+	if sourceFieldType.Kind != analyze.TypeKindPointer && targetFieldType.Kind == analyze.TypeKindPointer {
+		return StrategyPointerWrap, "pointer wrap"
+	}
+
+	// Check for pointer-to-pointer struct conversions (e.g., *Node -> *NodeDTO)
+	if sourceFieldType.Kind == analyze.TypeKindPointer && targetFieldType.Kind == analyze.TypeKindPointer {
+		srcElem := sourceFieldType.ElemType
+
+		tgtElem := targetFieldType.ElemType
+		if srcElem != nil && tgtElem != nil &&
+			srcElem.Kind == analyze.TypeKindStruct && tgtElem.Kind == analyze.TypeKindStruct {
+			return StrategyPointerNestedCast, "pointer nested cast"
+		}
+	}
+
+	if sourceFieldType.Kind == analyze.TypeKindSlice && targetFieldType.Kind == analyze.TypeKindSlice {
+		// For slices, check if hint says dive (introspect elements) or final
+		if hint == mapping.HintDive {
+			return StrategySliceMap, explSliceMap + " (dive)"
+		}
+
+		return StrategySliceMap, explSliceMap
+	}
+
+	if sourceFieldType.Kind == analyze.TypeKindArray && targetFieldType.Kind == analyze.TypeKindArray {
+		// Arrays are treated like slices for mapping purposes (element-wise).
+		if hint == mapping.HintDive {
+			return StrategySliceMap, explSliceMap + " (dive, array)"
+		}
+
+		return StrategySliceMap, explSliceMap + " (array)"
+	}
+
+	if sourceFieldType.Kind == analyze.TypeKindStruct && targetFieldType.Kind == analyze.TypeKindStruct {
+		// For structs, check if hint says dive (recursively map fields) or final
+		if hint == mapping.HintDive {
+			return StrategyNestedCast, explNestedStruct + " (dive)"
+		}
+		// Default behavior: introspect structs unless marked final
+		return StrategyNestedCast, explNestedStruct
+	}
+
+	return StrategyTransform, "needs transform"
+}
+
+func (r *Resolver) determineIncompatibleStrategy(
+	sourceFieldType, targetFieldType *analyze.TypeInfo,
+	hint mapping.IntrospectionHint,
+) (ConversionStrategy, string) {
+	// Check for pointer-to-pointer struct conversions (e.g., *Node -> *NodeDTO)
+	if sourceFieldType.Kind == analyze.TypeKindPointer && targetFieldType.Kind == analyze.TypeKindPointer {
+		srcElem := sourceFieldType.ElemType
+
+		tgtElem := targetFieldType.ElemType
+		if srcElem != nil && tgtElem != nil &&
+			srcElem.Kind == analyze.TypeKindStruct && tgtElem.Kind == analyze.TypeKindStruct {
+			return StrategyPointerNestedCast, "pointer nested cast"
+		}
+	}
+
+	// Also check for struct/slice even when marked as incompatible
+	if sourceFieldType.Kind == analyze.TypeKindStruct && targetFieldType.Kind == analyze.TypeKindStruct {
+		if hint == mapping.HintDive {
+			return StrategyNestedCast, explNestedStruct + " (dive)"
+		}
+
+		return StrategyNestedCast, explNestedStruct
+	}
+
+	if sourceFieldType.Kind == analyze.TypeKindSlice && targetFieldType.Kind == analyze.TypeKindSlice {
+		if hint == mapping.HintDive {
+			return StrategySliceMap, explSliceMap + " (dive)"
+		}
+
+		return StrategySliceMap, explSliceMap
+	}
+
+	if sourceFieldType.Kind == analyze.TypeKindArray && targetFieldType.Kind == analyze.TypeKindArray {
+		if hint == mapping.HintDive {
+			return StrategySliceMap, explSliceMap + " (dive, array)"
+		}
+
+		return StrategySliceMap, explSliceMap + " (array)"
+	}
+
+	return StrategyTransform, "incompatible"
 }
 
 // resolveFieldType resolves the TypeInfo for a field at the given path.
@@ -866,116 +880,138 @@ func (r *Resolver) detectNestedConversions(result *ResolvedTypePair, diags *diag
 	nestedMap := make(map[string]*NestedConversion)
 
 	for _, m := range result.Mappings {
-		if m.Strategy == StrategyNestedCast || m.Strategy == StrategySliceMap {
-			// Get the source and target types for nested conversion
-			if len(m.SourcePaths) > 0 && len(m.TargetPaths) > 0 {
-				sourceFieldType := r.resolveFieldType(m.SourcePaths[0], result.SourceType)
-				targetFieldType := r.resolveFieldType(m.TargetPaths[0], result.TargetType)
-
-				if sourceFieldType != nil && targetFieldType != nil {
-					// For slice/array mappings, get the element types
-					isSlice := m.Strategy == StrategySliceMap
-					actualSourceType := sourceFieldType
-					actualTargetType := targetFieldType
-
-					if isSlice {
-						if elem := r.collectionElem(sourceFieldType); elem != nil {
-							actualSourceType = elem
-						}
-
-						if elem := r.collectionElem(targetFieldType); elem != nil {
-							actualTargetType = elem
-						}
-					}
-
-					// Handle pointer element types
-					if actualSourceType.Kind == analyze.TypeKindPointer && actualSourceType.ElemType != nil {
-						actualSourceType = actualSourceType.ElemType
-					}
-
-					if actualTargetType.Kind == analyze.TypeKindPointer && actualTargetType.ElemType != nil {
-						actualTargetType = actualTargetType.ElemType
-					}
-
-					// Only process struct-to-struct conversions
-					if actualSourceType.Kind != analyze.TypeKindStruct || actualTargetType.Kind != analyze.TypeKindStruct {
-						continue
-					}
-
-					key := fmt.Sprintf("%s->%s", actualSourceType.ID, actualTargetType.ID)
-					if existing, ok := nestedMap[key]; ok {
-						existing.ReferencedBy = append(existing.ReferencedBy, m.TargetPaths[0])
-					} else {
-						nestedMap[key] = &NestedConversion{
-							SourceType:     actualSourceType,
-							TargetType:     actualTargetType,
-							ReferencedBy:   []mapping.FieldPath{m.TargetPaths[0]},
-							IsSliceElement: isSlice,
-						}
-					}
-				}
-			}
-		}
+		r.analyzeMappingForNestedConversion(&m, result, nestedMap)
 	}
 
 	// Recursively resolve nested type pairs
 	for key, nc := range nestedMap {
-		// Note: if key is already in the cache, we reuse it (cycle-safe).
-		if cached, exists := r.resolvedPairs[key]; exists {
-			nc.ResolvedPair = cached
-			result.NestedPairs = append(result.NestedPairs, *nc)
+		r.resolveNestedConversion(key, nc, result, diags, depth)
+	}
+}
 
-			continue
+func (r *Resolver) analyzeMappingForNestedConversion(
+	m *ResolvedFieldMapping,
+	result *ResolvedTypePair,
+	nestedMap map[string]*NestedConversion,
+) {
+	if m.Strategy != StrategyNestedCast && m.Strategy != StrategySliceMap {
+		return
+	}
+
+	// Get the source and target types for nested conversion
+	if len(m.SourcePaths) == 0 || len(m.TargetPaths) == 0 {
+		return
+	}
+
+	sourceFieldType := r.resolveFieldType(m.SourcePaths[0], result.SourceType)
+	targetFieldType := r.resolveFieldType(m.TargetPaths[0], result.TargetType)
+
+	if sourceFieldType == nil || targetFieldType == nil {
+		return
+	}
+
+	// For slice/array mappings, get the element types
+	isSlice := m.Strategy == StrategySliceMap
+	actualSourceType := sourceFieldType
+	actualTargetType := targetFieldType
+
+	if isSlice {
+		if elem := r.collectionElem(sourceFieldType); elem != nil {
+			actualSourceType = elem
 		}
 
-		// Check recursion depth
-		if r.config.MaxRecursionDepth > 0 && depth >= r.config.MaxRecursionDepth {
-			diags.AddWarning("max_recursion_depth",
-				"max recursion depth reached for "+key,
+		if elem := r.collectionElem(targetFieldType); elem != nil {
+			actualTargetType = elem
+		}
+	}
+
+	// Handle pointer element types
+	if actualSourceType.Kind == analyze.TypeKindPointer && actualSourceType.ElemType != nil {
+		actualSourceType = actualSourceType.ElemType
+	}
+
+	if actualTargetType.Kind == analyze.TypeKindPointer && actualTargetType.ElemType != nil {
+		actualTargetType = actualTargetType.ElemType
+	}
+
+	// Only process struct-to-struct conversions
+	if actualSourceType.Kind != analyze.TypeKindStruct || actualTargetType.Kind != analyze.TypeKindStruct {
+		return
+	}
+
+	key := fmt.Sprintf("%s->%s", actualSourceType.ID, actualTargetType.ID)
+	if existing, ok := nestedMap[key]; ok {
+		existing.ReferencedBy = append(existing.ReferencedBy, m.TargetPaths[0])
+	} else {
+		nestedMap[key] = &NestedConversion{
+			SourceType:     actualSourceType,
+			TargetType:     actualTargetType,
+			ReferencedBy:   []mapping.FieldPath{m.TargetPaths[0]},
+			IsSliceElement: isSlice,
+		}
+	}
+}
+
+func (r *Resolver) resolveNestedConversion(
+	key string,
+	nc *NestedConversion,
+	result *ResolvedTypePair,
+	diags *diagnostic.Diagnostics,
+	depth int,
+) {
+	// Note: if key is already in the cache, we reuse it (cycle-safe).
+	if cached, exists := r.resolvedPairs[key]; exists {
+		nc.ResolvedPair = cached
+		result.NestedPairs = append(result.NestedPairs, *nc)
+
+		return
+	}
+
+	// Check recursion depth
+	if r.config.MaxRecursionDepth > 0 && depth >= r.config.MaxRecursionDepth {
+		diags.AddWarning("max_recursion_depth",
+			"max recursion depth reached for "+key,
+			key, "")
+
+		result.NestedPairs = append(result.NestedPairs, *nc)
+
+		return
+	}
+
+	// Recursively resolve if enabled
+	isRecursiveResolve := r.config.RecursiveResolve
+	isStructPair := nc.SourceType.Kind == analyze.TypeKindStruct &&
+		nc.TargetType.Kind == analyze.TypeKindStruct
+
+	// If we end up trying to resolve the exact same type pair as our parent, skip
+	// and let cache/self-reference handle it.
+	if isRecursiveResolve && isStructPair {
+		parentKey := ""
+		if result.SourceType != nil && result.TargetType != nil {
+			parentKey = fmt.Sprintf("%s->%s", result.SourceType.ID, result.TargetType.ID)
+		}
+
+		if parentKey != "" && parentKey == key {
+			diags.AddInfo("recursive_pair_self_reference",
+				"detected self-referential nested struct pair; skipping recursive resolve to avoid infinite recursion",
 				key, "")
 
 			result.NestedPairs = append(result.NestedPairs, *nc)
 
-			continue
+			return
 		}
 
-		// Recursively resolve if enabled
-		isRecursiveResolve := r.config.RecursiveResolve
-		isStructPair := nc.SourceType.Kind == analyze.TypeKindStruct &&
-			nc.TargetType.Kind == analyze.TypeKindStruct
-
-		// If we end up trying to resolve the exact same type pair as our parent, skip
-		// and let cache/self-reference handle it.
-		if isRecursiveResolve && isStructPair {
-			parentKey := ""
-			if result.SourceType != nil && result.TargetType != nil {
-				parentKey = fmt.Sprintf("%s->%s", result.SourceType.ID, result.TargetType.ID)
-			}
-
-			if parentKey != "" && parentKey == key {
-				diags.AddInfo("recursive_pair_self_reference",
-					"detected self-referential nested struct pair; skipping recursive resolve to avoid infinite recursion",
-					key, "")
-
-				result.NestedPairs = append(result.NestedPairs, *nc)
-
-				continue
-			}
+		nestedResult, err := r.resolveTypePairRecursive(nc.SourceType, nc.TargetType, diags, depth+1)
+		if err != nil {
+			diags.AddWarning("nested_resolve_error", err.Error(), key, "")
+		} else {
+			nc.ResolvedPair = nestedResult
+			// Cache the result
+			r.resolvedPairs[key] = nestedResult
 		}
-
-		if isRecursiveResolve && isStructPair {
-			nestedResult, err := r.resolveTypePairRecursive(nc.SourceType, nc.TargetType, diags, depth+1)
-			if err != nil {
-				diags.AddWarning("nested_resolve_error", err.Error(), key, "")
-			} else {
-				nc.ResolvedPair = nestedResult
-				// Cache the result
-				r.resolvedPairs[key] = nestedResult
-			}
-		}
-
-		result.NestedPairs = append(result.NestedPairs, *nc)
 	}
+
+	result.NestedPairs = append(result.NestedPairs, *nc)
 }
 
 // sortMappings sorts mappings for deterministic output.

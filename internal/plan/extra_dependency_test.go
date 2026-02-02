@@ -14,8 +14,14 @@ func TestPopulateExtraTargetDependencies_BuildsDepsAndDetectsMissing(t *testing.
 		TargetType: &analyze.TypeInfo{ID: analyze.TypeID{PkgPath: "p", Name: "T"}},
 		Mappings: []ResolvedFieldMapping{
 			{TargetPaths: []mapping.FieldPath{mustPath(t, "A")}},
-			{TargetPaths: []mapping.FieldPath{mustPath(t, "B")}, Extra: []mapping.ExtraVal{{Name: "x", Def: mapping.ExtraDef{Target: "A"}}}},
-			{TargetPaths: []mapping.FieldPath{mustPath(t, "C")}, Extra: []mapping.ExtraVal{{Name: "y", Def: mapping.ExtraDef{Target: "Missing"}}}},
+			{
+				TargetPaths: []mapping.FieldPath{mustPath(t, "B")},
+				Extra:       []mapping.ExtraVal{{Name: "x", Def: mapping.ExtraDef{Target: "A"}}},
+			},
+			{
+				TargetPaths: []mapping.FieldPath{mustPath(t, "C")},
+				Extra:       []mapping.ExtraVal{{Name: "y", Def: mapping.ExtraDef{Target: "Missing"}}},
+			},
 		},
 	}
 

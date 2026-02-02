@@ -21,7 +21,8 @@ func TestGenerate_PointersExample_Compiles(t *testing.T) {
 	// Ensure a clean output dir so the test is repeatable.
 	_ = os.RemoveAll(outDir)
 
-	cmd := exec.Command("go", "run", "./cmd/caster-generator", "gen",
+	cmd := exec.CommandContext(t.Context(),
+		"go", "run", "./cmd/caster-generator", "gen",
 		"-pkg", "./examples/pointers",
 		"-mapping", filepath.Join(exampleDir, "map.yaml"),
 		"-out", outDir,
@@ -48,7 +49,7 @@ func TestGenerate_PointersExample_Compiles(t *testing.T) {
 	}
 
 	// Compile the example package (including generated code).
-	build := exec.Command("go", "test", "./examples/pointers", "-run", "^$", "-count=1")
+	build := exec.CommandContext(t.Context(), "go", "test", "./examples/pointers", "-run", "^$", "-count=1")
 	build.Dir = repoRoot
 
 	b, err = build.CombinedOutput()

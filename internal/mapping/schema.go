@@ -109,6 +109,7 @@ func (f FieldRefArray) First() string {
 	if v, ok := common.First(f); ok {
 		return v.Path
 	}
+
 	return ""
 }
 
@@ -117,6 +118,7 @@ func (f FieldRefArray) FirstRef() FieldRef {
 	if v, ok := common.First(f); ok {
 		return v
 	}
+
 	return FieldRef{}
 }
 

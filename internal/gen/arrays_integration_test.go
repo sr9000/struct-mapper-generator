@@ -18,7 +18,7 @@ func TestGenerate_ArraysExample_Compiles(t *testing.T) {
 
 	_ = os.RemoveAll(outDir)
 
-	cmd := exec.Command("go", "run", "./cmd/caster-generator", "gen",
+	cmd := exec.CommandContext(t.Context(), "go", "run", "./cmd/caster-generator", "gen",
 		"-pkg", "./examples/arrays",
 		"-mapping", filepath.Join(exampleDir, "map.yaml"),
 		"-out", outDir,
@@ -30,7 +30,7 @@ func TestGenerate_ArraysExample_Compiles(t *testing.T) {
 		t.Fatalf("gen failed: %v\n%s", err, string(b))
 	}
 
-	build := exec.Command("go", "test", "./examples/arrays", "-run", "^$", "-count=1")
+	build := exec.CommandContext(t.Context(), "go", "test", "./examples/arrays", "-run", "^$", "-count=1")
 	build.Dir = repoRoot
 
 	b, err = build.CombinedOutput()

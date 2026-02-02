@@ -8,15 +8,16 @@
 package main
 
 import (
+	"flag"
+	"fmt"
+	"os"
+	"strings"
+
 	"caster-generator/internal/analyze"
 	"caster-generator/internal/diagnostic"
 	"caster-generator/internal/gen"
 	"caster-generator/internal/mapping"
 	"caster-generator/internal/plan"
-	"flag"
-	"fmt"
-	"os"
-	"strings"
 )
 
 const (
@@ -331,14 +332,16 @@ Options:
 	// Warn about incomplete mappings that were fixed with placeholders
 	incompleteMappings := resolvedPlan.FindIncompleteMappings()
 	if len(incompleteMappings) > 0 {
-		fmt.Fprintln(os.Stderr, "\nNote: The following mappings have incompatible types and were moved to 'fields' with placeholder transforms:")
+		fmt.Fprintln(os.Stderr, "\nNote: The following mappings have incompatible types "+
+			"and were moved to 'fields' with placeholder transforms:")
 
 		for _, im := range incompleteMappings {
 			fmt.Fprintf(os.Stderr, "  - %s -> %s (in %s)\n", im.SourcePath, im.TargetPath, im.TypePair)
 			fmt.Fprintf(os.Stderr, "    reason: %s\n", im.Explanation)
 		}
 
-		fmt.Fprintln(os.Stderr, "\nPlease implement the TODO_* transform functions or rename them to your actual function names.")
+		fmt.Fprintln(os.Stderr, "\nPlease implement the TODO_* transform functions "+
+			"or rename them to your actual function names.")
 	}
 }
 

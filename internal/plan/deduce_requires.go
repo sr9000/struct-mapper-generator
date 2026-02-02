@@ -67,7 +67,8 @@ func (r *Resolver) deduceRequiresTypes(plan *ResolvedMappingPlan) {
 	for key, pair := range uniquePairs {
 		for i := range pair.Requires {
 			req := &pair.Requires[i]
-			// Only deduce if type is explicitly interface{} or empty (which defaults to interface{} in loader but let's check string)
+			// Only deduce if type is explicitly interface{} or empty
+			// (which defaults to interface{} in loader but let's check string)
 			if req.Type != "interface{}" && req.Type != "" {
 				continue
 			}
@@ -106,14 +107,16 @@ func (r *Resolver) deduceRequiresTypes(plan *ResolvedMappingPlan) {
 							srcPath, err := mapping.ParsePath(extra.Def.Source)
 							if err == nil {
 								fieldType = r.resolveFieldType(srcPath, usage.Parent.SourceType)
-								originDesc = fmt.Sprintf("mapping %s->%s source field %s", usage.Parent.SourceType.ID, usage.Parent.TargetType.ID, extra.Def.Source)
+								originDesc = fmt.Sprintf("mapping %s->%s source field %s",
+									usage.Parent.SourceType.ID, usage.Parent.TargetType.ID, extra.Def.Source)
 							}
 						} else if extra.Def.Target != "" {
 							// Try to resolve from target
 							tgtPath, err := mapping.ParsePath(extra.Def.Target)
 							if err == nil {
 								fieldType = r.resolveFieldType(tgtPath, usage.Parent.TargetType)
-								originDesc = fmt.Sprintf("mapping %s->%s target field %s", usage.Parent.SourceType.ID, usage.Parent.TargetType.ID, extra.Def.Target)
+								originDesc = fmt.Sprintf("mapping %s->%s target field %s",
+									usage.Parent.SourceType.ID, usage.Parent.TargetType.ID, extra.Def.Target)
 							}
 						}
 
@@ -140,7 +143,8 @@ func (r *Resolver) deduceRequiresTypes(plan *ResolvedMappingPlan) {
 						conflict = true
 
 						plan.Diagnostics.AddWarning("requires_type_conflict",
-							fmt.Sprintf("Conflicting deduced types for required variable %q: %s (from %s) vs %s (from %s). Keeping interface{}.",
+							fmt.Sprintf("Conflicting deduced types for required variable %q: "+
+								"%s (from %s) vs %s (from %s). Keeping interface{}.",
 								req.Name, first.TypeStr, first.Source, c.TypeStr, c.Source),
 							key, "")
 					}

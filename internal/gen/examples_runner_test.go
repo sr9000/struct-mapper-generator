@@ -7,6 +7,8 @@ import (
 )
 
 func TestExamples_RunScripts(t *testing.T) {
+	t.Parallel()
+
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatalf("repo root: %v", err)
@@ -23,7 +25,7 @@ func TestExamples_RunScripts(t *testing.T) {
 		t.Run(filepath.Base(filepath.Dir(script)), func(t *testing.T) {
 			t.Parallel()
 
-			cmd := exec.Command("bash", script)
+			cmd := exec.CommandContext(t.Context(), "bash", script)
 			cmd.Dir = repoRoot
 
 			b, err := cmd.CombinedOutput()

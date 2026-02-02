@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"go/format"
-	"path"
 	"sort"
 	"strings"
 	"text/template"
@@ -40,6 +39,7 @@ func DefaultGeneratorConfig() GeneratorConfig {
 // Generator generates Go code from a resolved mapping plan.
 type Generator struct {
 	config GeneratorConfig
+	graph  *analyze.TypeGraph
 }
 
 // NewGenerator creates a new Generator with the given configuration.
@@ -58,6 +58,7 @@ type GeneratedFile struct {
 // Generate generates Go code from a ResolvedMappingPlan.
 // Returns a list of generated files.
 func (g *Generator) Generate(p *plan.ResolvedMappingPlan) ([]GeneratedFile, error) {
+	g.graph = p.TypeGraph
 	var files []GeneratedFile
 
 	for _, pair := range p.TypePairs {
@@ -202,8 +203,8 @@ type nestedCasterRef struct {
 
 // buildTemplateData constructs the template data from a resolved type pair.
 func (g *Generator) buildTemplateData(pair *plan.ResolvedTypePair) *templateData {
-	srcPkgAlias := common.PkgAlias(pair.SourceType.ID.PkgPath)
-	tgtPkgAlias := common.PkgAlias(pair.TargetType.ID.PkgPath)
+	srcPkgAlias := g.getPkgName(pair.SourceType.ID.PkgPath)
+	tgtPkgAlias := g.getPkgName(pair.TargetType.ID.PkgPath)
 
 	data := &templateData{
 		PackageName:      g.config.PackageName,
@@ -350,11 +351,11 @@ func (g *Generator) collectNestedCasters(
 		nestedRef := nestedCasterRef{
 			FunctionName: g.nestedFunctionName(nested.SourceType, nested.TargetType),
 			SourceType: typeRef{
-				Package: common.PkgAlias(nested.SourceType.ID.PkgPath),
+				Package: g.getPkgName(nested.SourceType.ID.PkgPath),
 				Name:    nested.SourceType.ID.Name,
 			},
 			TargetType: typeRef{
-				Package: common.PkgAlias(nested.TargetType.ID.PkgPath),
+				Package: g.getPkgName(nested.TargetType.ID.PkgPath),
 				Name:    nested.TargetType.ID.Name,
 			},
 		}
@@ -823,20 +824,34 @@ func (g *Generator) identifyMissingTransforms(
 	return missing
 }
 
+// getPkgName returns the package name for a given package path.
+// It tries to look up the name from the type graph, falling back to the path base alias.
+func (g *Generator) getPkgName(pkgPath string) string {
+	if pkgPath == "" {
+		return ""
+	}
+	if g.graph != nil {
+		if pkgInfo, ok := g.graph.Packages[pkgPath]; ok {
+			return pkgInfo.Name
+		}
+	}
+	return common.PkgAlias(pkgPath)
+}
+
 // Helper functions
 
 func (g *Generator) filename(pair *plan.ResolvedTypePair) string {
 	src := strings.ToLower(pair.SourceType.ID.Name)
 	tgt := strings.ToLower(pair.TargetType.ID.Name)
-	srcPkg := path.Base(pair.SourceType.ID.PkgPath)
-	tgtPkg := path.Base(pair.TargetType.ID.PkgPath)
+	srcPkg := g.getPkgName(pair.SourceType.ID.PkgPath)
+	tgtPkg := g.getPkgName(pair.TargetType.ID.PkgPath)
 
 	return fmt.Sprintf("%s_%s_to_%s_%s.go", srcPkg, src, tgtPkg, tgt)
 }
 
 func (g *Generator) functionName(pair *plan.ResolvedTypePair) string {
-	srcPkg := g.capitalize(path.Base(pair.SourceType.ID.PkgPath))
-	tgtPkg := g.capitalize(path.Base(pair.TargetType.ID.PkgPath))
+	srcPkg := g.capitalize(g.getPkgName(pair.SourceType.ID.PkgPath))
+	tgtPkg := g.capitalize(g.getPkgName(pair.TargetType.ID.PkgPath))
 
 	return fmt.Sprintf("%s%sTo%s%s",
 		srcPkg, pair.SourceType.ID.Name,
@@ -844,8 +859,8 @@ func (g *Generator) functionName(pair *plan.ResolvedTypePair) string {
 }
 
 func (g *Generator) nestedFunctionName(src, tgt *analyze.TypeInfo) string {
-	srcPkg := g.capitalize(path.Base(src.ID.PkgPath))
-	tgtPkg := g.capitalize(path.Base(tgt.ID.PkgPath))
+	srcPkg := g.capitalize(g.getPkgName(src.ID.PkgPath))
+	tgtPkg := g.capitalize(g.getPkgName(tgt.ID.PkgPath))
 
 	return fmt.Sprintf("%s%sTo%s%s", srcPkg, src.ID.Name, tgtPkg, tgt.ID.Name)
 }
@@ -855,7 +870,7 @@ func (g *Generator) addImport(imports map[string]importSpec, pkgPath string) {
 		return
 	}
 
-	alias := common.PkgAlias(pkgPath)
+	alias := g.getPkgName(pkgPath)
 	imports[pkgPath] = importSpec{
 		Alias: alias,
 		Path:  pkgPath,
@@ -958,7 +973,7 @@ func (g *Generator) typeRefString(t *analyze.TypeInfo, imports map[string]import
 		if t.ID.PkgPath != "" {
 			g.addImport(imports, t.ID.PkgPath)
 
-			return common.PkgAlias(t.ID.PkgPath) + "." + t.ID.Name
+			return g.getPkgName(t.ID.PkgPath) + "." + t.ID.Name
 		}
 
 		return t.ID.Name

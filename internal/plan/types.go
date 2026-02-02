@@ -13,6 +13,8 @@ import (
 type ResolvedMappingPlan struct {
 	// TypePairs is the list of resolved type pair mappings.
 	TypePairs []ResolvedTypePair
+	// TypeGraph holds all analyzed types and packages to allow looking up package names.
+	TypeGraph *analyze.TypeGraph
 	// Diagnostics contains all warnings and errors from resolution.
 	Diagnostics diagnostic.Diagnostics
 }

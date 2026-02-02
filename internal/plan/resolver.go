@@ -85,6 +85,7 @@ func (r *Resolver) Resolve() (*ResolvedMappingPlan, error) {
 	plan := &ResolvedMappingPlan{
 		TypePairs:   []ResolvedTypePair{},
 		Diagnostics: diagnostic.Diagnostics{},
+		TypeGraph:   r.graph,
 	}
 
 	if r.mappingDef == nil {

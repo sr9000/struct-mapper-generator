@@ -19,12 +19,12 @@ func TestExamples_RunScripts(t *testing.T) {
 	}
 
 	for _, script := range scripts {
-		script := script
 		t.Run(filepath.Base(filepath.Dir(script)), func(t *testing.T) {
 			t.Parallel()
 
 			cmd := exec.Command("bash", script)
 			cmd.Dir = repoRoot
+
 			b, err := cmd.CombinedOutput()
 			if err != nil {
 				t.Fatalf("%s failed: %v\n%s", script, err, string(b))

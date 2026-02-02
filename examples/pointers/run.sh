@@ -1,19 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # shellcheck source=../_scripts/common.sh
-source "${here}/../_scripts/common.sh"
+source "${ROOT_DIR}/examples/_scripts/common.sh"
 
-out_dir="${here}/generated"
-clean_dir "$out_dir"
-
-run_caster_generator gen \
+echo "==> Generating casters (pointers example)"
+( cd "${ROOT_DIR}" && go run ./cmd/caster-generator gen \
   -pkg ./examples/pointers \
-  -mapping "${here}/map.yaml" \
-  -out "$out_dir"
+  -mapping ./examples/pointers/map.yaml \
+  -out ./examples/pointers/generated \
+  -package casters )
 
-# Compile the example package (includes generated code).
-root="$(repo_root)"
-(cd "$root" && go test ./examples/pointers -run '^$' -count=1)
+echo "==> Compile-check generated package"
+( cd "${ROOT_DIR}" && go test ./examples/pointers/generated -run '^$' )

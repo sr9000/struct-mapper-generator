@@ -2,7 +2,14 @@
 # It intentionally focuses on pointer deref behavior.
 #
 # Usage (from repo root):
-#   go run ./cmd/caster-generator gen -pkg ./examples/pointers -mapping ./examples/pointers/map.yaml
+#   go run ./cmd/caster-generator gen \
+#     -pkg ./examples/pointers \
+#     -mapping ./examples/pointers/map.yaml \
+#     -out ./examples/pointers/generated \
+#     -package casters
+#
+# Then compile-check:
+#   go test ./examples/pointers/generated -run '^$'
 
 version: "1"
 

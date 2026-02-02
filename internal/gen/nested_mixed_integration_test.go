@@ -24,6 +24,7 @@ func TestGenerate_NestedMixedExample_Compiles(t *testing.T) {
 		"-out", outDir,
 	)
 	cmd.Dir = repoRoot
+
 	b, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("gen failed: %v\n%s", err, string(b))
@@ -31,6 +32,7 @@ func TestGenerate_NestedMixedExample_Compiles(t *testing.T) {
 
 	build := exec.Command("go", "test", "./examples/nested-mixed", "-run", "^$", "-count=1")
 	build.Dir = repoRoot
+
 	b, err = build.CombinedOutput()
 	if err != nil {
 		t.Fatalf("compile failed: %v\n%s", err, string(b))

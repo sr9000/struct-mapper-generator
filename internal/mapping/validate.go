@@ -27,9 +27,11 @@ func (e ValidationError) Error() string {
 	if e.TypePair != "" {
 		prefix = append(prefix, e.TypePair)
 	}
+
 	if e.FieldPath != "" {
 		prefix = append(prefix, e.FieldPath)
 	}
+
 	if len(prefix) > 0 {
 		return strings.Join(prefix, " ") + ": " + e.Message
 	}
@@ -80,6 +82,7 @@ func Validate(mf *MappingFile, graph *analyze.TypeGraph) *ValidationResult {
 		res.addError("", "", "mapping file is nil")
 		return res
 	}
+
 	if graph == nil {
 		res.addError("", "", "type graph is nil")
 		return res
@@ -87,15 +90,18 @@ func Validate(mf *MappingFile, graph *analyze.TypeGraph) *ValidationResult {
 
 	// Validate transform defs: detect duplicates (required by tests).
 	seenTransforms := map[string]struct{}{}
+
 	for i := range mf.Transforms {
 		name := mf.Transforms[i].Name
 		if name == "" {
 			continue
 		}
+
 		if _, ok := seenTransforms[name]; ok {
 			res.addError("", name, fmt.Sprintf("duplicate transform %q", name))
 			continue
 		}
+
 		seenTransforms[name] = struct{}{}
 	}
 
@@ -108,6 +114,7 @@ func Validate(mf *MappingFile, graph *analyze.TypeGraph) *ValidationResult {
 			res.addError(tpStr, tm.Source, fmt.Sprintf("source type %q not found", tm.Source))
 			continue
 		}
+
 		dstT := ResolveTypeID(tm.Target, graph)
 		if dstT == nil {
 			res.addError(tpStr, tm.Target, fmt.Sprintf("target type %q not found", tm.Target))
@@ -119,6 +126,7 @@ func Validate(mf *MappingFile, graph *analyze.TypeGraph) *ValidationResult {
 			if err := validatePathAgainstType(sp, srcT); err != nil {
 				res.addError(tpStr, sp, fmt.Sprintf("invalid source path in 121: %v", err))
 			}
+
 			if err := validatePathAgainstType(tp, dstT); err != nil {
 				res.addError(tpStr, tp, fmt.Sprintf("invalid target path in 121: %v", err))
 			}
@@ -160,9 +168,11 @@ func validateFieldMapping(
 			res.addError(typePairStr, "", "field mapping must specify target")
 			continue
 		}
+
 		if err := validatePathAgainstType(t.Path, dstT); err != nil {
 			res.addError(typePairStr, t.Path, fmt.Sprintf("invalid target path: %v", err))
 		}
+
 		if !t.Hint.IsValid() {
 			res.addError(typePairStr, t.Path, fmt.Sprintf("invalid hint %q", t.Hint))
 		}
@@ -178,9 +188,11 @@ func validateFieldMapping(
 					res.addError(typePairStr, "", "field mapping must specify source")
 					continue
 				}
+
 				if err := validatePathAgainstType(s.Path, srcT); err != nil {
 					res.addError(typePairStr, s.Path, fmt.Sprintf("invalid source path: %v", err))
 				}
+
 				if !s.Hint.IsValid() {
 					res.addError(typePairStr, s.Path, fmt.Sprintf("invalid hint %q", s.Hint))
 				}
@@ -190,7 +202,7 @@ func validateFieldMapping(
 
 	// many:1 and many:many require a transform
 	if fm.NeedsTransform() && fm.Transform == "" {
-		res.addError(typePairStr, "", fmt.Sprintf("%s mapping requires transform", card.String()))
+		res.addError(typePairStr, "", card.String()+" mapping requires transform")
 	}
 
 	// A referenced transform must exist in the registry.
@@ -210,12 +222,14 @@ func validateFieldMapping(
 		// If this extra is intended to satisfy a required argument, ensure it's declared.
 		if parent != nil {
 			declared := false
+
 			for i := range parent.Requires {
 				if parent.Requires[i].Name == ev.Name {
 					declared = true
 					break
 				}
 			}
+
 			if !declared {
 				res.addError(typePairStr, "", fmt.Sprintf("extra %q references an undeclared requires arg; add it under requires: or rename", ev.Name))
 			}
@@ -226,6 +240,7 @@ func validateFieldMapping(
 				res.addError(typePairStr, ev.Def.Source, fmt.Sprintf("invalid extra.def.source: %v", err))
 			}
 		}
+
 		if ev.Def.Target != "" {
 			if err := validatePathAgainstType(ev.Def.Target, dstT); err != nil {
 				res.addError(typePairStr, ev.Def.Target, fmt.Sprintf("invalid extra.def.target: %v", err))
@@ -260,15 +275,18 @@ func validatePathAgainstType(pathStr string, typeInfo *analyze.TypeInfo) error {
 		}
 
 		var fld *analyze.FieldInfo
+
 		for i := range current.Fields {
 			if current.Fields[i].Name == seg.Name {
 				fld = &current.Fields[i]
 				break
 			}
 		}
+
 		if fld == nil {
 			return fmt.Errorf("field %q not found in %s", seg.Name, current.ID)
 		}
+
 		if !fld.Exported {
 			return fmt.Errorf("field %q is not exported", seg.Name)
 		}
@@ -283,9 +301,11 @@ func validatePathAgainstType(pathStr string, typeInfo *analyze.TypeInfo) error {
 					return fmt.Errorf("nil pointer element while resolving %q", seg.Name)
 				}
 			}
+
 			if current.Kind != analyze.TypeKindSlice {
 				return fmt.Errorf("segment %q uses [] but resolved field is %s", seg.Name, current.Kind)
 			}
+
 			current = current.ElemType
 			if current == nil {
 				return fmt.Errorf("nil slice element while resolving %q", seg.Name)
@@ -311,6 +331,7 @@ func ResolveTypeID(typeIDStr string, graph *analyze.TypeGraph) *analyze.TypeInfo
 		if name == "" {
 			return nil
 		}
+
 		for id, t := range graph.Types {
 			if id.Name == name {
 				return t
@@ -326,6 +347,7 @@ func ResolveTypeID(typeIDStr string, graph *analyze.TypeGraph) *analyze.TypeInfo
 	}
 
 	pkgStr := typeIDStr[:lastDot]
+
 	name := typeIDStr[lastDot+1:]
 	if pkgStr == "" || name == "" {
 		return nil

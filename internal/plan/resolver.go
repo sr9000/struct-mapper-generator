@@ -378,6 +378,7 @@ func (r *Resolver) resolveFieldMapping(
 			Default:     fm.Default,
 			Cardinality: mapping.CardinalityOneToOne,
 			Explanation: "default value: " + *fm.Default,
+			Extra:       fm.Extra,
 		}, nil
 	}
 
@@ -393,48 +394,44 @@ func (r *Resolver) resolveFieldMapping(
 		sourcePaths = append(sourcePaths, sp)
 	}
 
-	cardinality := fm.GetCardinality()
-	effectiveHint := fm.GetEffectiveHint()
+	// If a transform is explicitly specified, keep StrategyTransform.
+	// Otherwise, derive the strategy from source/target types so YAML field
+	// mappings behave the same as auto-matched ones (pointer deref/wrap/etc).
+	strategy := StrategyDirectAssign
+	explanation := "field mapping: 1:1"
+	cardinality := mapping.CardinalityOneToOne
+	// Default hint is none; for field mappings we currently only use the first source's hint.
+	hint := mapping.HintNone
+	if len(fm.Source) > 0 {
+		hint = fm.Source[0].Hint
+	}
 
-	// Determine strategy
-	var (
-		strategy    ConversionStrategy
-		explanation string
-	)
-
-	switch {
-	case fm.Transform != "":
+	if fm.Transform != "" {
 		strategy = StrategyTransform
-		explanation = "transform: " + fm.Transform
-	case len(sourcePaths) == 1 && len(targetPaths) == 1:
-		var compat string
-
-		strategy, compat = r.determineStrategyWithHint(sourcePaths[0], targetPaths[0], sourceType, targetType, effectiveHint)
-
-		explanation = fmt.Sprintf("field mapping: %s (%s)", cardinality, compat)
-		if effectiveHint != mapping.HintNone {
-			explanation += fmt.Sprintf(" [hint: %s]", effectiveHint)
-		}
-	default:
-		strategy = StrategyTransform
-
-		explanation = fmt.Sprintf("multi-field mapping: %s", cardinality)
-		if effectiveHint != mapping.HintNone {
-			explanation += fmt.Sprintf(" [hint: %s]", effectiveHint)
-		}
+		explanation = "field mapping: 1:1 (transform)"
+	} else if len(sourcePaths) > 0 && len(targetPaths) > 0 {
+		st, expl := r.determineStrategyWithHint(
+			sourcePaths[0],
+			targetPaths[0],
+			sourceType,
+			targetType,
+			hint,
+		)
+		strategy = st
+		explanation = "field mapping: 1:1 (" + expl + ")"
 	}
 
 	return &ResolvedFieldMapping{
-		TargetPaths:   targetPaths,
 		SourcePaths:   sourcePaths,
+		TargetPaths:   targetPaths,
 		Source:        source,
 		Cardinality:   cardinality,
 		Strategy:      strategy,
 		Transform:     fm.Transform,
 		Confidence:    1.0,
 		Explanation:   explanation,
-		EffectiveHint: effectiveHint,
-		Extra:         fm.Extra, // Preserve extra
+		EffectiveHint: hint,
+		Extra:         fm.Extra,
 	}, nil
 }
 
@@ -547,16 +544,16 @@ func (r *Resolver) determineStrategyWithHint(
 func (r *Resolver) resolveFieldType(path mapping.FieldPath, typeInfo *analyze.TypeInfo) *analyze.TypeInfo {
 	current := typeInfo
 
-	for _, seg := range path.Segments {
+	for i, seg := range path.Segments {
 		if current.Kind != analyze.TypeKindStruct {
 			return nil
 		}
 
 		var found *analyze.FieldInfo
 
-		for i := range current.Fields {
-			if current.Fields[i].Name == seg.Name {
-				found = &current.Fields[i]
+		for j := range current.Fields {
+			if current.Fields[j].Name == seg.Name {
+				found = &current.Fields[j]
 				break
 			}
 		}
@@ -571,8 +568,10 @@ func (r *Resolver) resolveFieldType(path mapping.FieldPath, typeInfo *analyze.Ty
 			current = current.ElemType
 		}
 
-		// Auto-deref pointers for nested access
-		if current.Kind == analyze.TypeKindPointer {
+		// Auto-deref pointers only when we're stepping *through* them to reach a deeper field.
+		// For leaf fields, we must preserve pointer-ness so strategies like PointerDeref can be selected.
+		isLast := i == len(path.Segments)-1
+		if !isLast && current.Kind == analyze.TypeKindPointer {
 			current = current.ElemType
 		}
 	}
@@ -754,15 +753,15 @@ func (r *Resolver) collectionElem(t *analyze.TypeInfo) *analyze.TypeInfo {
 	if t == nil {
 		return nil
 	}
+
 	if (t.Kind == analyze.TypeKindSlice || t.Kind == analyze.TypeKindArray) && t.ElemType != nil {
 		return t.ElemType
 	}
+
 	return nil
 }
 
 // detectNestedConversions identifies nested struct conversions needed and recursively resolves them.
-//
-//nolint:gocyclo // This function intentionally trades complexity for locality/readability.
 func (r *Resolver) detectNestedConversions(result *ResolvedTypePair, diags *Diagnostics, depth int) {
 	nestedMap := make(map[string]*NestedConversion)
 
@@ -783,6 +782,7 @@ func (r *Resolver) detectNestedConversions(result *ResolvedTypePair, diags *Diag
 						if elem := r.collectionElem(sourceFieldType); elem != nil {
 							actualSourceType = elem
 						}
+
 						if elem := r.collectionElem(targetFieldType); elem != nil {
 							actualTargetType = elem
 						}

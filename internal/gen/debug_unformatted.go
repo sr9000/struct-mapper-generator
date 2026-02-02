@@ -13,6 +13,7 @@ func writeDebugUnformatted(outDir, filename string, content []byte) error {
 	if outDir == "" || filename == "" {
 		return nil
 	}
+
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return err
 	}

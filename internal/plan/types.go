@@ -294,9 +294,11 @@ func (p *ResolvedMappingPlan) FindIncompleteMappings() []IncompleteMappingInfo {
 				if len(m.SourcePaths) > 0 {
 					info.SourcePath = m.SourcePaths[0].String()
 				}
+
 				if len(m.TargetPaths) > 0 {
 					info.TargetPath = m.TargetPaths[0].String()
 				}
+
 				incomplete = append(incomplete, info)
 			}
 		}
@@ -317,6 +319,7 @@ func (p *ResolvedTypePair) UnusedRequires() []string {
 	}
 
 	used := make(map[string]bool)
+
 	for _, m := range p.Mappings {
 		// Use struct Name for ExtraVal
 		for _, extra := range m.Extra {
@@ -333,6 +336,7 @@ func (p *ResolvedTypePair) UnusedRequires() []string {
 	}
 
 	var unused []string
+
 	for _, req := range p.Requires {
 		if !used[req.Name] {
 			// Check if name conflicts with source type fields?
@@ -340,6 +344,7 @@ func (p *ResolvedTypePair) UnusedRequires() []string {
 			unused = append(unused, req.Name)
 		}
 	}
+
 	return unused
 }
 
@@ -350,6 +355,7 @@ func (p *ResolvedTypePair) CheckRequireConflicts() []string {
 	}
 
 	var conflicts []string
+
 	for _, req := range p.Requires {
 		for _, field := range p.SourceType.Fields {
 			if field.Name == req.Name {
@@ -358,5 +364,6 @@ func (p *ResolvedTypePair) CheckRequireConflicts() []string {
 			}
 		}
 	}
+
 	return conflicts
 }

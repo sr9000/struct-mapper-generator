@@ -98,6 +98,7 @@ func ExportSuggestionsYAMLWithConfig(plan *ResolvedMappingPlan, config ExportCon
 	for i, tm := range mf.TypeMappings {
 		// Find corresponding resolved type pair for comments
 		var resolvedTP *ResolvedTypePair
+
 		for j := range plan.TypePairs {
 			tp := &plan.TypePairs[j]
 			if tp.SourceType.ID.String() == tm.Source && tp.TargetType.ID.String() == tm.Target {
@@ -119,9 +120,11 @@ func ExportSuggestionsYAMLWithConfig(plan *ResolvedMappingPlan, config ExportCon
 	// Add transforms if present
 	if len(mf.Transforms) > 0 {
 		transformsKey := &yaml.Node{Kind: yaml.ScalarNode, Value: "transforms"}
+
 		transformsValue := &yaml.Node{Kind: yaml.SequenceNode}
 		for _, td := range mf.Transforms {
 			tdNode := &yaml.Node{Kind: yaml.MappingNode}
+
 			tdNode.Content = append(tdNode.Content,
 				&yaml.Node{Kind: yaml.ScalarNode, Value: "name"},
 				&yaml.Node{Kind: yaml.ScalarNode, Value: td.Name},
@@ -132,8 +135,10 @@ func ExportSuggestionsYAMLWithConfig(plan *ResolvedMappingPlan, config ExportCon
 					&yaml.Node{Kind: yaml.ScalarNode, Value: td.Func},
 				)
 			}
+
 			transformsValue.Content = append(transformsValue.Content, tdNode)
 		}
+
 		root.Content = append(root.Content, transformsKey, transformsValue)
 	}
 
@@ -157,6 +162,7 @@ func findResolvedTypePair(plan *ResolvedMappingPlan, source, target string) *Res
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -179,9 +185,11 @@ func buildTypeMappingNode(tm *mapping.TypeMapping, resolvedTP *ResolvedTypePair,
 	// requires
 	if len(tm.Requires) > 0 {
 		requiresKey := &yaml.Node{Kind: yaml.ScalarNode, Value: "requires"}
+
 		requiresValue := &yaml.Node{Kind: yaml.SequenceNode}
 		for _, req := range tm.Requires {
 			reqNode := &yaml.Node{Kind: yaml.MappingNode}
+
 			reqNode.Content = append(reqNode.Content,
 				&yaml.Node{Kind: yaml.ScalarNode, Value: "name"},
 				&yaml.Node{Kind: yaml.ScalarNode, Value: req.Name},
@@ -192,14 +200,17 @@ func buildTypeMappingNode(tm *mapping.TypeMapping, resolvedTP *ResolvedTypePair,
 					&yaml.Node{Kind: yaml.ScalarNode, Value: req.Type},
 				)
 			}
+
 			requiresValue.Content = append(requiresValue.Content, reqNode)
 		}
+
 		node.Content = append(node.Content, requiresKey, requiresValue)
 	}
 
 	// 121
 	if len(tm.OneToOne) > 0 {
 		oneToOneKey := &yaml.Node{Kind: yaml.ScalarNode, Value: "121"}
+
 		oneToOneValue := &yaml.Node{Kind: yaml.MappingNode}
 		for src, tgt := range tm.OneToOne {
 			oneToOneValue.Content = append(oneToOneValue.Content,
@@ -207,6 +218,7 @@ func buildTypeMappingNode(tm *mapping.TypeMapping, resolvedTP *ResolvedTypePair,
 				&yaml.Node{Kind: yaml.ScalarNode, Value: tgt},
 			)
 		}
+
 		node.Content = append(node.Content, oneToOneKey, oneToOneValue)
 	}
 
@@ -214,10 +226,12 @@ func buildTypeMappingNode(tm *mapping.TypeMapping, resolvedTP *ResolvedTypePair,
 	if len(tm.Fields) > 0 {
 		fieldsKey := &yaml.Node{Kind: yaml.ScalarNode, Value: "fields"}
 		fieldsValue := &yaml.Node{Kind: yaml.SequenceNode}
+
 		for _, fm := range tm.Fields {
 			fmNode := buildFieldMappingNode(&fm)
 			fieldsValue.Content = append(fieldsValue.Content, fmNode)
 		}
+
 		node.Content = append(node.Content, fieldsKey, fieldsValue)
 	}
 
@@ -241,20 +255,25 @@ func buildTypeMappingNode(tm *mapping.TypeMapping, resolvedTP *ResolvedTypePair,
 					if um.TargetPath.String() == ignorePath {
 						// Build comment with rejection reason and candidates
 						var commentParts []string
+
 						commentParts = append(commentParts, um.Reason)
 
 						if len(um.Candidates) > 0 {
 							commentParts = append(commentParts, "Candidates:")
+
 							for i, c := range um.Candidates {
 								if i >= 3 { // Limit to top 3 in comment
 									break
 								}
+
 								commentParts = append(commentParts,
 									fmt.Sprintf("  %d. %s (score=%.2f, type=%s)",
 										i+1, c.SourceField.Name, c.CombinedScore, c.TypeCompat.Compatibility.String()))
 							}
 						}
+
 						ignoreNode.LineComment = "# " + strings.Join(commentParts, "; ")
+
 						break
 					}
 				}
@@ -262,6 +281,7 @@ func buildTypeMappingNode(tm *mapping.TypeMapping, resolvedTP *ResolvedTypePair,
 
 			ignoreValue.Content = append(ignoreValue.Content, ignoreNode)
 		}
+
 		node.Content = append(node.Content, ignoreKey, ignoreValue)
 	}
 
@@ -269,6 +289,7 @@ func buildTypeMappingNode(tm *mapping.TypeMapping, resolvedTP *ResolvedTypePair,
 	if len(tm.Auto) > 0 {
 		autoKey := &yaml.Node{Kind: yaml.ScalarNode, Value: "auto"}
 		autoValue := &yaml.Node{Kind: yaml.SequenceNode}
+
 		for _, fm := range tm.Auto {
 			fmNode := buildFieldMappingNode(&fm)
 
@@ -280,6 +301,7 @@ func buildTypeMappingNode(tm *mapping.TypeMapping, resolvedTP *ResolvedTypePair,
 						len(fm.Source) > 0 && m.SourcePaths[0].String() == fm.Source[0].Path {
 						fmNode.LineComment = fmt.Sprintf("# confidence=%.2f, strategy=%s",
 							m.Confidence, m.Strategy.String())
+
 						break
 					}
 				}
@@ -287,6 +309,7 @@ func buildTypeMappingNode(tm *mapping.TypeMapping, resolvedTP *ResolvedTypePair,
 
 			autoValue.Content = append(autoValue.Content, fmNode)
 		}
+
 		node.Content = append(node.Content, autoKey, autoValue)
 	}
 
@@ -300,24 +323,28 @@ func buildFieldMappingNode(fm *mapping.FieldMapping) *yaml.Node {
 	// source
 	if len(fm.Source) > 0 {
 		sourceKey := &yaml.Node{Kind: yaml.ScalarNode, Value: "source"}
+
 		var sourceValue *yaml.Node
 		if len(fm.Source) == 1 && fm.Source[0].Hint == mapping.HintNone {
 			sourceValue = &yaml.Node{Kind: yaml.ScalarNode, Value: fm.Source[0].Path}
 		} else {
 			sourceValue = buildFieldRefArrayNode(fm.Source)
 		}
+
 		node.Content = append(node.Content, sourceKey, sourceValue)
 	}
 
 	// target
 	if len(fm.Target) > 0 {
 		targetKey := &yaml.Node{Kind: yaml.ScalarNode, Value: "target"}
+
 		var targetValue *yaml.Node
 		if len(fm.Target) == 1 && fm.Target[0].Hint == mapping.HintNone {
 			targetValue = &yaml.Node{Kind: yaml.ScalarNode, Value: fm.Target[0].Path}
 		} else {
 			targetValue = buildFieldRefArrayNode(fm.Target)
 		}
+
 		node.Content = append(node.Content, targetKey, targetValue)
 	}
 
@@ -340,6 +367,7 @@ func buildFieldMappingNode(fm *mapping.FieldMapping) *yaml.Node {
 	// extra
 	if len(fm.Extra) > 0 {
 		extraKey := &yaml.Node{Kind: yaml.ScalarNode, Value: "extra"}
+
 		extraValue := &yaml.Node{Kind: yaml.SequenceNode}
 		for _, ev := range fm.Extra {
 			evNode := &yaml.Node{Kind: yaml.MappingNode}
@@ -357,12 +385,14 @@ func buildFieldMappingNode(fm *mapping.FieldMapping) *yaml.Node {
 						&yaml.Node{Kind: yaml.ScalarNode, Value: ev.Def.Source},
 					)
 				}
+
 				if ev.Def.Target != "" {
 					defNode.Content = append(defNode.Content,
 						&yaml.Node{Kind: yaml.ScalarNode, Value: "target"},
 						&yaml.Node{Kind: yaml.ScalarNode, Value: ev.Def.Target},
 					)
 				}
+
 				evNode.Content = append(evNode.Content,
 					&yaml.Node{Kind: yaml.ScalarNode, Value: "def"},
 					defNode,
@@ -371,6 +401,7 @@ func buildFieldMappingNode(fm *mapping.FieldMapping) *yaml.Node {
 
 			extraValue.Content = append(extraValue.Content, evNode)
 		}
+
 		node.Content = append(node.Content, extraKey, extraValue)
 	}
 
@@ -389,11 +420,13 @@ func buildFieldRefArrayNode(refs mapping.FieldRefArray) *yaml.Node {
 			&yaml.Node{Kind: yaml.ScalarNode, Value: refs[0].Path},
 			&yaml.Node{Kind: yaml.ScalarNode, Value: string(refs[0].Hint)},
 		)
+
 		return node
 	}
 
 	// Multiple refs
 	node := &yaml.Node{Kind: yaml.SequenceNode}
+
 	for _, ref := range refs {
 		if ref.Hint == mapping.HintNone {
 			node.Content = append(node.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: ref.Path})
@@ -406,6 +439,7 @@ func buildFieldRefArrayNode(refs mapping.FieldRefArray) *yaml.Node {
 			node.Content = append(node.Content, refNode)
 		}
 	}
+
 	return node
 } // exportTypePairSuggestions exports a single type pair as a TypeMapping.
 func exportTypePairSuggestions(tp *ResolvedTypePair) mapping.TypeMapping {
@@ -449,6 +483,7 @@ func exportTypePairSuggestions(tp *ResolvedTypePair) mapping.TypeMapping {
 			if m.Strategy == StrategyTransform && m.Transform == "" && fm.Transform == "" {
 				fm.Transform = generatePlaceholderTransformName(m.SourcePaths, m.TargetPaths)
 			}
+
 			tm.Fields = append(tm.Fields, fm)
 
 		case MappingSourceYAMLIgnore, MappingSourceYAMLAuto:
@@ -488,6 +523,7 @@ func generatePlaceholderTransformName(sourcePaths []mapping.FieldPath, targetPat
 	if len(sourcePaths) > 0 {
 		sourceName = sourcePaths[0].String()
 	}
+
 	if len(targetPaths) > 0 {
 		targetName = targetPaths[0].String()
 	}

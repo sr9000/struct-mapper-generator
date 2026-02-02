@@ -28,6 +28,7 @@ func (r *Resolver) deduceRequiresTypes(plan *ResolvedMappingPlan) {
 
 	// Helper to traverse recursively
 	var traverse func(pair *ResolvedTypePair)
+
 	traverse = func(pair *ResolvedTypePair) {
 		if pair == nil {
 			return
@@ -37,12 +38,14 @@ func (r *Resolver) deduceRequiresTypes(plan *ResolvedMappingPlan) {
 		if _, seen := uniquePairs[key]; seen {
 			return
 		}
+
 		uniquePairs[key] = pair
 
 		for _, nested := range pair.NestedPairs {
 			if nested.ResolvedPair == nil {
 				continue
 			}
+
 			childKey := getPairKey(nested.ResolvedPair)
 
 			// Record usage
@@ -93,8 +96,10 @@ func (r *Resolver) deduceRequiresTypes(plan *ResolvedMappingPlan) {
 				// Check Extra in matching mapping for the current requirement name
 				for _, extra := range matchingMapping.Extra {
 					if extra.Name == req.Name {
-						var fieldType *analyze.TypeInfo
-						var originDesc string
+						var (
+							fieldType  *analyze.TypeInfo
+							originDesc string
+						)
 
 						if extra.Def.Source != "" {
 							// Try to resolve from source
@@ -129,9 +134,11 @@ func (r *Resolver) deduceRequiresTypes(plan *ResolvedMappingPlan) {
 			if len(candidates) > 0 {
 				first := candidates[0]
 				conflict := false
+
 				for _, c := range candidates[1:] {
 					if c.TypeStr != first.TypeStr {
 						conflict = true
+
 						plan.Diagnostics.AddWarning("requires_type_conflict",
 							fmt.Sprintf("Conflicting deduced types for required variable %q: %s (from %s) vs %s (from %s). Keeping interface{}.",
 								req.Name, first.TypeStr, first.Source, c.TypeStr, c.Source),
@@ -151,6 +158,7 @@ func getPairKey(p *ResolvedTypePair) string {
 	if p == nil || p.SourceType == nil || p.TargetType == nil {
 		return "unknown"
 	}
+
 	return fmt.Sprintf("%s->%s", p.SourceType.ID, p.TargetType.ID)
 }
 
@@ -163,5 +171,6 @@ func pathsIntersect(a, b []mapping.FieldPath) bool {
 			}
 		}
 	}
+
 	return false
 }

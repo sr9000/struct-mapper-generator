@@ -4,10 +4,10 @@ import (
 	"go/types"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"caster-generator/internal/analyze"
 	"caster-generator/internal/mapping"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestDeduceRequiresTypes(t *testing.T) {
@@ -151,6 +151,6 @@ func TestDeduceRequiresConflict(t *testing.T) {
 
 	// Should conflict and fallback to interface{}
 	assert.Equal(t, "interface{}", childPair.Requires[0].Type)
-	assert.True(t, len(plan.Diagnostics.Warnings) > 0)
+	assert.NotEmpty(t, plan.Diagnostics.Warnings)
 	assert.Contains(t, plan.Diagnostics.Warnings[0].Code, "conflict")
 }

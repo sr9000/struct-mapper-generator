@@ -67,6 +67,10 @@ This document tracks robustness work as a checkbox list, similar to `PLAN.md`.
 
 - [x] Nested structs (already partially supported) — add targeted examples + tests
 - [x] Pointers (already partially supported) — add targeted examples + tests
+  - [x] Fix: explicit YAML field mappings now derive conversion strategy from types (so pointer deref/wrap works even when not auto-matched)
+  - [x] Fix: resolver preserves pointer-ness for leaf fields (only auto-derefs pointers for *intermediate* path segments)
+  - [x] Add regression unit test: `internal/plan/pointer_deref_yaml_test.go`
+  - [x] Update example runner: `examples/pointers/run.sh` generates into `examples/pointers/generated` and compile-checks it
 - [x] Arrays — add initial end-to-end support (analyzer + resolution + codegen) + example
 - [ ] Recursive structs:
   - [ ] prevent infinite recursion during resolution

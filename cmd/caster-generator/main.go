@@ -305,6 +305,7 @@ Options:
 		AmbiguityThreshold:      *ambiguityThreshold,
 		IncludeRejectedComments: true,
 	}
+
 	yamlData, err := plan.ExportSuggestionsYAMLWithConfig(resolvedPlan, exportConfig)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error exporting suggestions: %v\n", err)
@@ -331,10 +332,12 @@ Options:
 	incompleteMappings := resolvedPlan.FindIncompleteMappings()
 	if len(incompleteMappings) > 0 {
 		fmt.Fprintln(os.Stderr, "\nNote: The following mappings have incompatible types and were moved to 'fields' with placeholder transforms:")
+
 		for _, im := range incompleteMappings {
 			fmt.Fprintf(os.Stderr, "  - %s -> %s (in %s)\n", im.SourcePath, im.TargetPath, im.TypePair)
 			fmt.Fprintf(os.Stderr, "    reason: %s\n", im.Explanation)
 		}
+
 		fmt.Fprintln(os.Stderr, "\nPlease implement the TODO_* transform functions or rename them to your actual function names.")
 	}
 }
@@ -427,11 +430,13 @@ Options:
 	incompleteMappings := resolvedPlan.FindIncompleteMappings()
 	if len(incompleteMappings) > 0 {
 		fmt.Fprintln(os.Stderr, "\nError: Found mappings with incompatible types that require custom transform functions:")
+
 		for _, im := range incompleteMappings {
 			fmt.Fprintf(os.Stderr, "  - %s -> %s (in %s)\n", im.SourcePath, im.TargetPath, im.TypePair)
 			fmt.Fprintf(os.Stderr, "    reason: %s\n", im.Explanation)
 			fmt.Fprintf(os.Stderr, "    source: %s\n", im.Source)
 		}
+
 		fmt.Fprintln(os.Stderr, "\nTo fix this:")
 		fmt.Fprintln(os.Stderr, "  1. Move these mappings from '121' to 'fields' section in your YAML")
 		fmt.Fprintln(os.Stderr, "  2. Add a 'transform' function name for each")

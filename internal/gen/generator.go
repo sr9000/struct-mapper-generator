@@ -445,12 +445,14 @@ func (g *Generator) applyTransformStrategy(
 	// Extras can reference either source fields or target fields.
 	if len(m.Extra) > 0 {
 		var extraArgs []string
+
 		for _, ev := range m.Extra {
 			// Prefer explicit source/target, else fallback to the extra name.
 			if ev.Def.Source != "" {
 				extraArgs = append(extraArgs, "in."+ev.Def.Source)
 				continue
 			}
+
 			if ev.Def.Target != "" {
 				extraArgs = append(extraArgs, "out."+ev.Def.Target)
 				continue
@@ -458,12 +460,14 @@ func (g *Generator) applyTransformStrategy(
 
 			// If Name matches a required arg, it should be passed verbatim.
 			isReq := false
+
 			for _, req := range pair.Requires {
 				if req.Name == ev.Name {
 					isReq = true
 					break
 				}
 			}
+
 			if isReq {
 				extraArgs = append(extraArgs, ev.Name)
 			} else {
@@ -620,6 +624,7 @@ func (g *Generator) buildTransformArgs(paths []mapping.FieldPath, pair *plan.Res
 	for _, p := range paths {
 		// Check if this path refers to a required argument
 		isReq := false
+
 		if len(p.Segments) > 0 {
 			firstSegment := p.Segments[0].Name
 			for _, req := range pair.Requires {
@@ -646,6 +651,7 @@ func (g *Generator) identifyMissingTransforms(
 	imports map[string]importSpec,
 ) []MissingTransform {
 	var missing []MissingTransform
+
 	seen := make(map[string]bool)
 
 	for _, m := range pair.Mappings {
@@ -661,6 +667,7 @@ func (g *Generator) identifyMissingTransforms(
 		if !seen[m.Transform] {
 			// Determine argument types
 			var argTypes []string
+
 			for _, sp := range m.SourcePaths {
 				typ := g.getFieldTypeString(pair.SourceType, sp.String(), imports)
 				argTypes = append(argTypes, typ)
@@ -678,6 +685,7 @@ func (g *Generator) identifyMissingTransforms(
 					// Fallback
 					typ = "interface{}"
 				}
+
 				argTypes = append(argTypes, typ)
 			}
 

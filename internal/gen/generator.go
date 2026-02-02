@@ -245,6 +245,9 @@ func (g *Generator) buildTemplateData(pair *plan.ResolvedTypePair) *templateData
 		}
 	}
 
+	// Reorder assignments based on implicit dependencies (e.g., extra.def.target).
+	g.orderAssignmentsByDependencies(data, pair)
+
 	// Add TODO comments for unmapped fields
 	if g.config.IncludeUnmappedTODOs {
 		for _, unmapped := range pair.UnmappedTargets {
@@ -270,6 +273,73 @@ func (g *Generator) buildTemplateData(pair *plan.ResolvedTypePair) *templateData
 	})
 
 	return data
+}
+
+// orderAssignmentsByDependencies topologically sorts assignments based on
+// ResolvedFieldMapping.DependsOnTargets.
+func (g *Generator) orderAssignmentsByDependencies(data *templateData, pair *plan.ResolvedTypePair) {
+	if data == nil || pair == nil {
+		return
+	}
+
+	if len(data.Assignments) == 0 || len(pair.Mappings) == 0 {
+		return
+	}
+
+	// Assume buildAssignment produced 1 assignment per mapping, in the same order.
+	// That’s true for current generator behavior.
+	n := min(len(pair.Mappings), len(data.Assignments))
+
+	// Build index by exact target field expr, using the assignment list.
+	byTarget := make(map[string]int, n)
+	for i := range n {
+		t := data.Assignments[i].TargetField
+		if t != "" {
+			byTarget[t] = i
+		}
+	}
+
+	order, err := topoSortAssignments(n, func(i int) []int {
+		m := pair.Mappings[i]
+		if len(m.DependsOnTargets) == 0 {
+			return nil
+		}
+
+		var deps []int
+
+		for _, dep := range m.DependsOnTargets {
+			depExpr := "out." + dep.String()
+
+			j, ok := byTarget[depExpr]
+			if !ok {
+				// Missing dependency should have been flagged by planner; ignore here.
+				continue
+			}
+
+			deps = append(deps, j)
+		}
+
+		// Deterministic.
+		sort.Ints(deps)
+
+		return deps
+	})
+	if err != nil {
+		// Best-effort: keep original order.
+		return
+	}
+
+	reordered := make([]assignmentData, 0, n)
+	for _, idx := range order {
+		reordered = append(reordered, data.Assignments[idx])
+	}
+
+	// Keep any tail assignments (shouldn't exist today, but stay safe).
+	if len(data.Assignments) > n {
+		reordered = append(reordered, data.Assignments[n:]...)
+	}
+
+	data.Assignments = reordered
 }
 
 // collectNestedCasters adds nested caster references to the template data.
@@ -354,6 +424,9 @@ func (g *Generator) applyConversionStrategy(
 		assignment.SliceElemVar = "i"
 		assignment.SliceBody = g.buildSliceMapping(m, pair, imports)
 
+	case plan.StrategyPointerNestedCast:
+		g.applyPointerNestedCastStrategy(assignment, m, pair, imports)
+
 	case plan.StrategyNestedCast:
 		g.applyNestedCastStrategy(assignment, m, pair)
 
@@ -408,6 +481,45 @@ func (g *Generator) applyPointerWrapStrategy(
 		srcExpr := g.sourceFieldExpr(m.SourcePaths, m, pair)
 		assignment.SourceExpr = fmt.Sprintf("func() *%s { v := %s; return &v }()", typeStr, srcExpr)
 	}
+}
+
+func (g *Generator) applyPointerNestedCastStrategy(
+	assignment *assignmentData,
+	m *plan.ResolvedFieldMapping,
+	pair *plan.ResolvedTypePair,
+	imports map[string]importSpec,
+) {
+	if len(m.SourcePaths) == 0 || len(m.TargetPaths) == 0 {
+		return
+	}
+
+	srcType := g.getFieldTypeInfo(pair.SourceType, m.SourcePaths[0].String())
+	tgtType := g.getFieldTypeInfo(pair.TargetType, m.TargetPaths[0].String())
+
+	if srcType == nil || tgtType == nil {
+		return
+	}
+
+	// Get the element types (what the pointers point to)
+	srcElem := srcType
+	tgtElem := tgtType
+
+	if srcType.Kind == analyze.TypeKindPointer && srcType.ElemType != nil {
+		srcElem = srcType.ElemType
+	}
+
+	if tgtType.Kind == analyze.TypeKindPointer && tgtType.ElemType != nil {
+		tgtElem = tgtType.ElemType
+	}
+
+	casterName := g.nestedFunctionName(srcElem, tgtElem)
+	tgtElemStr := g.typeRefString(tgtElem, imports)
+
+	// Generate: func() *TargetType { if src == nil { return nil }; v := Caster(*src); return &v }()
+	assignment.SourceExpr = fmt.Sprintf(
+		"func() *%s { if %s == nil { return nil }; v := %s(*%s); return &v }()",
+		tgtElemStr, assignment.SourceExpr, casterName, assignment.SourceExpr,
+	)
 }
 
 func (g *Generator) applyNestedCastStrategy(

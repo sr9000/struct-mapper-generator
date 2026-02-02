@@ -72,21 +72,23 @@ This document tracks robustness work as a checkbox list, similar to `PLAN.md`.
   - [x] Add regression unit test: `internal/plan/pointer_deref_yaml_test.go`
   - [x] Update example runner: `examples/pointers/run.sh` generates into `examples/pointers/generated` and compile-checks it
 - [x] Arrays — add initial end-to-end support (analyzer + resolution + codegen) + example
-- [ ] Recursive structs:
-  - [ ] prevent infinite recursion during resolution
-  - [ ] prevent infinite recursion during codegen
-  - [ ] add example demonstrating safe behavior
+- [x] Recursive structs:
+  - [x] prevent infinite recursion during resolution (cache-based cycle detection)
+  - [x] prevent infinite recursion during codegen (nil-check stop condition)
+  - [x] add `StrategyPointerNestedCast` for `*Struct → *Struct` conversions
+  - [x] add example `examples/recursive/` demonstrating safe recursive type casting
 
-### Advanced feature (future)
+### `extra` dependency semantics
 
-- [ ] Generate missing target structs (DTO → domain, repo → domain):
-  - [ ] propose new type definitions based on source shape
-  - [ ] write generated types to a separate folder/package
-  - [ ] optionally generate mapping + casters targeting those new types
+> Requirement: `extra` fields implicitly create dependencies between assigned fields.
 
----
-
-## Completed work (so far)
+- [x] During planning/resolution, treat `extra` defs as dependency edges so that when target field B depends on target field A via `extra.def.target`, the plan respects ordering
+  - Added `DependsOnTargets` field to `ResolvedFieldMapping`
+  - Added `populateExtraTargetDependencies()` in resolver
+- [x] Ensure generator uses topological ordering for dependent assignments
+  - Added `topoSortAssignments()` and `orderAssignmentsByDependencies()` in generator
+- [x] Improve diagnostics when dependencies are unsatisfied/cyclic
+  - Added `extra_dependency_missing` and `extra_dependency_cycle` error diagnostics
 
 - `cmd/caster-generator/main.go`
   - Added `suggest` flags for matching thresholds: `-min-confidence`, `-min-gap`, `-ambiguity-threshold`, `-max-candidates`.
@@ -120,9 +122,30 @@ This document tracks robustness work as a checkbox list, similar to `PLAN.md`.
   - `internal/gen`: generate fixed-length loops for array-to-array mapping; keep array length via `GoType.String()`.
   - `examples/arrays` + `internal/gen/arrays_integration_test.go`.
 
+- Recursive structs support
+  - `internal/plan/types.go`: added `StrategyPointerNestedCast` for `*Struct → *Struct` conversions.
+  - `internal/plan/resolver.go`: added pointer-to-pointer struct detection in `determineStrategyWithHint()`.
+  - `internal/gen/generator.go`: added `applyPointerNestedCastStrategy()` that generates nil-check + recursive caster call.
+  - `examples/recursive/`: new example with `Node` → `NodeDTO` recursive linked list conversion.
+  - Cycle safety: resolver caches resolved type pairs to prevent infinite recursion; generated code has nil-check stop condition.
+
+- Extra dependency semantics
+  - `internal/plan/types.go`: added `DependsOnTargets` field to `ResolvedFieldMapping`.
+  - `internal/plan/resolver.go`: added `populateExtraTargetDependencies()` to derive ordering constraints from `extra.def.target`.
+  - `internal/gen/toposort.go`: added topological sort utility for assignment ordering.
+  - `internal/gen/generator.go`: added `orderAssignmentsByDependencies()` to reorder assignments based on dependencies.
+  - Diagnostics: `extra_dependency_missing`, `extra_dependency_cycle` errors for invalid/cyclic dependencies.
+
+### Advanced feature (future)
+
+- [ ] Generate missing target structs (DTO → domain, repo → domain):
+  - [ ] propose new type definitions based on source shape
+  - [ ] write generated types to a separate folder/package
+  - [ ] optionally generate mapping + casters targeting those new types
+
 ---
 
-## Notes / assumptions
+## Completed work (so far)
 
 - Array support currently focuses on array-to-array mapping. We intentionally treat arrays as "collection-like" for nested mapping, but we don’t yet support array↔slice bridging.
 

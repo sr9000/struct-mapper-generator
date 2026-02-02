@@ -307,16 +307,10 @@ func (r *Resolver) resolveTypeMapping(
 	// Detect nested struct conversions (with recursive resolution)
 	r.detectNestedConversions(result, diags, 0)
 
-	// Check for unused requires
-	if unused := result.UnusedRequires(); len(unused) > 0 {
-		for _, u := range unused {
-			diags.AddWarning("unused_requires",
-				fmt.Sprintf("required variable %q is not used in any mapping", u),
-				typePairStr, "")
-		}
-	}
+	// Derive dependency edges from `extra.def.target` references.
+	r.populateExtraTargetDependencies(result, diags)
 
-	// Sort mappings for deterministic output
+	// Sort for determinism
 	r.sortMappings(result)
 
 	return result, nil
@@ -482,6 +476,17 @@ func (r *Resolver) determineStrategyWithHint(
 			return StrategyPointerWrap, "pointer wrap"
 		}
 
+		// Check for pointer-to-pointer struct conversions (e.g., *Node -> *NodeDTO)
+		if sourceFieldType.Kind == analyze.TypeKindPointer && targetFieldType.Kind == analyze.TypeKindPointer {
+			srcElem := sourceFieldType.ElemType
+
+			tgtElem := targetFieldType.ElemType
+			if srcElem != nil && tgtElem != nil &&
+				srcElem.Kind == analyze.TypeKindStruct && tgtElem.Kind == analyze.TypeKindStruct {
+				return StrategyPointerNestedCast, "pointer nested cast"
+			}
+		}
+
 		if sourceFieldType.Kind == analyze.TypeKindSlice && targetFieldType.Kind == analyze.TypeKindSlice {
 			// For slices, check if hint says dive (introspect elements) or final
 			if hint == mapping.HintDive {
@@ -511,6 +516,17 @@ func (r *Resolver) determineStrategyWithHint(
 
 		return StrategyTransform, "needs transform"
 	default:
+		// Check for pointer-to-pointer struct conversions (e.g., *Node -> *NodeDTO)
+		if sourceFieldType.Kind == analyze.TypeKindPointer && targetFieldType.Kind == analyze.TypeKindPointer {
+			srcElem := sourceFieldType.ElemType
+
+			tgtElem := targetFieldType.ElemType
+			if srcElem != nil && tgtElem != nil &&
+				srcElem.Kind == analyze.TypeKindStruct && tgtElem.Kind == analyze.TypeKindStruct {
+				return StrategyPointerNestedCast, "pointer nested cast"
+			}
+		}
+
 		// Also check for struct/slice even when marked as incompatible
 		if sourceFieldType.Kind == analyze.TypeKindStruct && targetFieldType.Kind == analyze.TypeKindStruct {
 			if hint == mapping.HintDive {
@@ -761,6 +777,89 @@ func (r *Resolver) collectionElem(t *analyze.TypeInfo) *analyze.TypeInfo {
 	return nil
 }
 
+// populateExtraTargetDependencies turns `extra.def.target` references into ordering dependencies.
+//
+// Semantics: if a mapping for target field B uses extra.def.target = "A" (or "A.Sub")
+// then B depends on the assignment for A (or A.Sub).
+func (r *Resolver) populateExtraTargetDependencies(pair *ResolvedTypePair, diags *Diagnostics) {
+	if pair == nil {
+		return
+	}
+
+	pairKey := ""
+	if pair.SourceType != nil && pair.TargetType != nil {
+		pairKey = fmt.Sprintf("%s->%s", pair.SourceType.ID, pair.TargetType.ID)
+	}
+
+	// Index which mapping produces which exact target path.
+	producer := make(map[string]int)
+
+	for i := range pair.Mappings {
+		m := &pair.Mappings[i]
+		for _, tp := range m.TargetPaths {
+			producer[tp.String()] = i
+		}
+	}
+
+	for i := range pair.Mappings {
+		m := &pair.Mappings[i]
+		if len(m.Extra) == 0 {
+			continue
+		}
+
+		deps := make(map[string]mapping.FieldPath)
+
+		for _, ev := range m.Extra {
+			if ev.Def.Target == "" {
+				continue
+			}
+
+			p, err := mapping.ParsePath(ev.Def.Target)
+			if err != nil {
+				diags.AddWarning("extra_target_invalid",
+					fmt.Sprintf("invalid extra.def.target %q: %v", ev.Def.Target, err),
+					pairKey, ev.Def.Target)
+
+				continue
+			}
+
+			// Self-dependency is always a cycle.
+			for _, tp := range m.TargetPaths {
+				if tp.String() == p.String() {
+					diags.AddError("extra_dependency_cycle",
+						fmt.Sprintf("mapping for %q depends on itself via extra.def.target", p.String()),
+						pairKey, p.String())
+
+					continue
+				}
+			}
+
+			if _, ok := producer[p.String()]; !ok {
+				diags.AddError("extra_dependency_missing",
+					fmt.Sprintf("extra.def.target %q refers to a target field with no assignment", p.String()),
+					pairKey, p.String())
+
+				continue
+			}
+
+			deps[p.String()] = p
+		}
+
+		if len(deps) == 0 {
+			continue
+		}
+
+		m.DependsOnTargets = m.DependsOnTargets[:0]
+		for _, p := range deps {
+			m.DependsOnTargets = append(m.DependsOnTargets, p)
+		}
+
+		sort.Slice(m.DependsOnTargets, func(a, b int) bool {
+			return m.DependsOnTargets[a].String() < m.DependsOnTargets[b].String()
+		})
+	}
+}
+
 // detectNestedConversions identifies nested struct conversions needed and recursively resolves them.
 func (r *Resolver) detectNestedConversions(result *ResolvedTypePair, diags *Diagnostics, depth int) {
 	nestedMap := make(map[string]*NestedConversion)
@@ -820,7 +919,7 @@ func (r *Resolver) detectNestedConversions(result *ResolvedTypePair, diags *Diag
 
 	// Recursively resolve nested type pairs
 	for key, nc := range nestedMap {
-		// Check if already resolved (cache lookup)
+		// Note: if key is already in the cache, we reuse it (cycle-safe).
 		if cached, exists := r.resolvedPairs[key]; exists {
 			nc.ResolvedPair = cached
 			result.NestedPairs = append(result.NestedPairs, *nc)
@@ -841,9 +940,28 @@ func (r *Resolver) detectNestedConversions(result *ResolvedTypePair, diags *Diag
 
 		// Recursively resolve if enabled
 		isRecursiveResolve := r.config.RecursiveResolve
-
 		isStructPair := nc.SourceType.Kind == analyze.TypeKindStruct &&
 			nc.TargetType.Kind == analyze.TypeKindStruct
+
+		// If we end up trying to resolve the exact same type pair as our parent, skip
+		// and let cache/self-reference handle it.
+		if isRecursiveResolve && isStructPair {
+			parentKey := ""
+			if result.SourceType != nil && result.TargetType != nil {
+				parentKey = fmt.Sprintf("%s->%s", result.SourceType.ID, result.TargetType.ID)
+			}
+
+			if parentKey != "" && parentKey == key {
+				diags.AddInfo("recursive_pair_self_reference",
+					"detected self-referential nested struct pair; skipping recursive resolve to avoid infinite recursion",
+					key, "")
+
+				result.NestedPairs = append(result.NestedPairs, *nc)
+
+				continue
+			}
+		}
+
 		if isRecursiveResolve && isStructPair {
 			nestedResult, err := r.resolveTypePairRecursive(nc.SourceType, nc.TargetType, diags, depth+1)
 			if err != nil {

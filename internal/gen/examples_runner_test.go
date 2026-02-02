@@ -16,6 +16,7 @@ func TestExamples_RunScripts(t *testing.T) {
 		filepath.Join(repoRoot, "examples", "pointers", "run.sh"),
 		filepath.Join(repoRoot, "examples", "nested-mixed", "run.sh"),
 		filepath.Join(repoRoot, "examples", "arrays", "run.sh"),
+		filepath.Join(repoRoot, "examples", "recursive", "run.sh"),
 	}
 
 	for _, script := range scripts {

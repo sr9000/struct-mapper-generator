@@ -1,0 +1,7 @@
+version: "1"
+mappings:
+  - source: recursive.Node
+    target: recursive.NodeDTO
+    121:
+      Value: Value
+      Next: Next

@@ -65,6 +65,9 @@ type ResolvedFieldMapping struct {
 	EffectiveHint mapping.IntrospectionHint
 	// Extra lists additional info field paths from the source type.
 	Extra []mapping.ExtraVal
+	// DependsOnTargets lists target field paths that must be assigned before this mapping.
+	// Derived from extra.def.target references (and potentially other implicit dependencies).
+	DependsOnTargets []mapping.FieldPath
 }
 
 // MappingSource indicates where a mapping rule originated.
@@ -115,6 +118,8 @@ const (
 	StrategyPointerWrap
 	// StrategySliceMap - map over slice elements.
 	StrategySliceMap
+	// StrategyPointerNestedCast - call nested caster on pointer with nil check.
+	StrategyPointerNestedCast
 	// StrategyNestedCast - call nested caster function.
 	StrategyNestedCast
 	// StrategyTransform - call custom transform function.
@@ -138,6 +143,8 @@ func (s ConversionStrategy) String() string {
 		return "pointer_wrap"
 	case StrategySliceMap:
 		return "slice_map"
+	case StrategyPointerNestedCast:
+		return "pointer_nested_cast"
 	case StrategyNestedCast:
 		return "nested_cast"
 	case StrategyTransform:

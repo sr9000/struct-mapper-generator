@@ -106,13 +106,12 @@ transforms:
   - name: FormatFullAddress
     signature: "func(line1, city, state, postal, country string) string"
 
-# Using 'types' format for better compatibility
-types:
+mappings:
   # ============================================
   # External -> Internal Order
   # ============================================
-  - from: caster-generator/examples/multi-mapping.ExternalOrder
-    to: caster-generator/examples/multi-mapping.InternalOrder
+  - source: caster-generator/examples/multi-mapping.ExternalOrder
+    target: caster-generator/examples/multi-mapping.InternalOrder
     fields:
       - source: ExtOrderID
         target: ExternalRef
@@ -135,8 +134,8 @@ types:
     ignore:
       - ID  # Internal ID is auto-generated
 
-  - from: caster-generator/examples/multi-mapping.ExternalItem
-    to: caster-generator/examples/multi-mapping.InternalItem
+  - source: caster-generator/examples/multi-mapping.ExternalItem
+    target: caster-generator/examples/multi-mapping.InternalItem
     fields:
       - source: ItemCode
         target: SKU
@@ -150,8 +149,8 @@ types:
     ignore:
       - ID  # Auto-generated
 
-  - from: caster-generator/examples/multi-mapping.ExternalAddress
-    to: caster-generator/examples/multi-mapping.InternalAddress
+  - source: caster-generator/examples/multi-mapping.ExternalAddress
+    target: caster-generator/examples/multi-mapping.InternalAddress
     fields:
       - source: Street
         target: Line1
@@ -169,8 +168,8 @@ types:
   # ============================================
   # Internal -> Warehouse Order
   # ============================================
-  - from: caster-generator/examples/multi-mapping.InternalOrder
-    to: caster-generator/examples/multi-mapping.WarehouseOrder
+  - source: caster-generator/examples/multi-mapping.InternalOrder
+    target: caster-generator/examples/multi-mapping.WarehouseOrder
     fields:
       - source: [ID, ExternalRef]
         target: OrderNumber
@@ -186,8 +185,8 @@ types:
     ignore:
       - Priority  # Set by business logic, not mapping
 
-  - from: caster-generator/examples/multi-mapping.InternalItem
-    to: caster-generator/examples/multi-mapping.WarehouseItem
+  - source: caster-generator/examples/multi-mapping.InternalItem
+    target: caster-generator/examples/multi-mapping.WarehouseItem
     fields:
       - source: SKU
         target: ProductCode
@@ -196,8 +195,8 @@ types:
       - source: Quantity
         target: Units
 
-  - from: caster-generator/examples/multi-mapping.InternalAddress
-    to: caster-generator/examples/multi-mapping.WarehouseAddress
+  - source: caster-generator/examples/multi-mapping.InternalAddress
+    target: caster-generator/examples/multi-mapping.WarehouseAddress
     fields:
       - source: [Line1, City, State, PostalCode, Country]
         target: FullAddress

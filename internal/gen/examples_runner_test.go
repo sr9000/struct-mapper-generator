@@ -28,6 +28,7 @@ func TestExamples_RunScripts(t *testing.T) {
 
 			cmd := exec.CommandContext(t.Context(), "bash", script)
 			cmd.Dir = repoRoot
+
 			cmd.Env = append(os.Environ(), "CG_NO_PROMPT=1", "CG_DEBUG=1")
 
 			b, err := cmd.CombinedOutput()

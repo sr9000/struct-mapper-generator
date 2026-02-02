@@ -15,8 +15,10 @@ func (r *Resolver) synthesizeTargetType(tm *mapping.TypeMapping, sourceType *ana
 	// For V1 we accept simply "Name" (default package?) or "pkg.Name".
 	// But generated types usually need a package.
 	// We use the full string as name if no dot, or split.
-	var typeName string
-	var pkgPath string
+	var (
+		typeName string
+		pkgPath  string
+	)
 
 	if idx := strings.LastIndex(tm.Target, "."); idx != -1 {
 		pkgPath = tm.Target[:idx]
@@ -80,8 +82,8 @@ func (r *Resolver) synthesizeTargetType(tm *mapping.TypeMapping, sourceType *ana
 		// For simplicity, we only handle top-level fields of the generated struct here.
 		// If nested generation is needed, it would be recursive.
 		fieldName := fullPath
-		if idx := strings.Index(fullPath, "."); idx != -1 {
-			fieldName = fullPath[:idx]
+		if before, _, ok := strings.Cut(fullPath, "."); ok {
+			fieldName = before
 		}
 
 		if _, exists := fields[fieldName]; exists {
@@ -128,11 +130,13 @@ func findField(t *analyze.TypeInfo, name string) *analyze.FieldInfo {
 	if t.Kind != analyze.TypeKindStruct {
 		return nil
 	}
+
 	for _, f := range t.Fields {
 		if f.Name == name {
 			return &f
 		}
 	}
+
 	return nil
 }
 
@@ -141,6 +145,7 @@ func deduceSourceType(root *analyze.TypeInfo, ref mapping.FieldRefArray, r *Reso
 	if len(ref) == 0 {
 		return nil
 	}
+
 	pathStr := ref.First() // simplified
 	// Split path
 	parts := strings.Split(pathStr, ".")
@@ -186,6 +191,7 @@ func (r *Resolver) resolveOrBasicType(name string) *analyze.TypeInfo {
 	// Check if pointer
 	if strings.HasPrefix(name, "*") {
 		elem := r.resolveOrBasicType(name[1:])
+
 		return &analyze.TypeInfo{
 			Kind:        analyze.TypeKindPointer,
 			ElemType:    elem,
@@ -197,6 +203,7 @@ func (r *Resolver) resolveOrBasicType(name string) *analyze.TypeInfo {
 	// Check if slice
 	if strings.HasPrefix(name, "[]") {
 		elem := r.resolveOrBasicType(name[2:])
+
 		return &analyze.TypeInfo{
 			Kind:        analyze.TypeKindSlice,
 			ElemType:    elem,

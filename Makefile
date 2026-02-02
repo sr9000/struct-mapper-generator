@@ -22,9 +22,10 @@ help:
 build:
 	go build -o $(BINARY) ./cmd/caster-generator/
 
-## lint: Run golangci-lint with auto-fix
+## lint: Run golangci-lint with auto-fix (excludes examples/)
 lint:
-	golangci-lint run --fix
+	@DIRS=$$(ls -la | awk '/^d/ && $$NF !~ /^\./ && $$NF !~ /examples/ {print "./" $$NF "/..."}'); \
+	golangci-lint run --fix $$DIRS
 
 ## test: Run all tests with race detection
 test:

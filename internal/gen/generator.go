@@ -70,6 +70,7 @@ type GeneratedFile struct {
 // Returns a list of generated files.
 func (g *Generator) Generate(p *plan.ResolvedMappingPlan) ([]GeneratedFile, error) {
 	g.graph = p.TypeGraph
+
 	var files []GeneratedFile
 
 	// Reset missing transforms for this run
@@ -91,6 +92,7 @@ func (g *Generator) Generate(p *plan.ResolvedMappingPlan) ([]GeneratedFile, erro
 		if err != nil {
 			return nil, fmt.Errorf("generating missing transforms: %w", err)
 		}
+
 		files = append(files, *file)
 	}
 
@@ -114,6 +116,7 @@ func (g *Generator) generateMissingTransformsFile() (*GeneratedFile, error) {
 	for k := range g.missingTransforms {
 		keys = append(keys, k)
 	}
+
 	sort.Strings(keys)
 
 	for _, name := range keys {
@@ -139,6 +142,7 @@ func (g *Generator) generateMissingTransformsFile() (*GeneratedFile, error) {
 	for _, imp := range imports {
 		data.Imports = append(data.Imports, imp)
 	}
+
 	sort.Slice(data.Imports, func(i, j int) bool {
 		return data.Imports[i].Path < data.Imports[j].Path
 	})
@@ -153,6 +157,7 @@ func (g *Generator) generateMissingTransformsFile() (*GeneratedFile, error) {
 		if g.config.OutputDir != "" {
 			_ = writeDebugUnformatted(g.config.OutputDir, data.Filename, buf.Bytes())
 		}
+
 		return &GeneratedFile{
 			Filename: data.Filename,
 			Content:  buf.Bytes(),
@@ -927,11 +932,13 @@ func (g *Generator) getPkgName(pkgPath string) string {
 	if pkgPath == "" {
 		return ""
 	}
+
 	if g.graph != nil {
 		if pkgInfo, ok := g.graph.Packages[pkgPath]; ok {
 			return pkgInfo.Name
 		}
 	}
+
 	return common.PkgAlias(pkgPath)
 }
 

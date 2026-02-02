@@ -1,6 +1,7 @@
 package gen
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -16,7 +17,7 @@ func (g *Generator) GenerateStruct(pair *plan.ResolvedTypePair, imports map[stri
 
 	t := pair.TargetType
 	if t == nil {
-		return "", fmt.Errorf("target type is nil")
+		return "", errors.New("target type is nil")
 	}
 
 	var sb strings.Builder
@@ -30,6 +31,7 @@ func (g *Generator) GenerateStruct(pair *plan.ResolvedTypePair, imports map[stri
 	}
 
 	sb.WriteString("}\n")
+
 	return sb.String(), nil
 }
 
@@ -50,5 +52,6 @@ func lowerFirst(s string) string {
 	if s == "" {
 		return ""
 	}
+
 	return strings.ToLower(s[:1]) + s[1:]
 }

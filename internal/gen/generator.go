@@ -833,6 +833,20 @@ func (g *Generator) buildElementConversion(
 		return fmt.Sprintf("%s(%s[i])", casterName, srcField)
 	}
 
+	// Handle pointer-to-struct element conversion
+	if srcElem.Kind == analyze.TypeKindPointer && tgtElem.Kind == analyze.TypeKindPointer {
+		srcInner := srcElem.ElemType
+		tgtInner := tgtElem.ElemType
+
+		if srcInner != nil && tgtInner != nil &&
+			srcInner.Kind == analyze.TypeKindStruct && tgtInner.Kind == analyze.TypeKindStruct {
+			casterName := g.nestedFunctionName(srcInner, tgtInner)
+
+			return fmt.Sprintf("func() %s { if %s[i] == nil { return nil }; v := %s(*%s[i]); return &v }()",
+				tgtElemStr, srcField, casterName, srcField)
+		}
+	}
+
 	// Fallback - hope for the best
 	return srcField + "[i]"
 }
@@ -1148,7 +1162,17 @@ func (g *Generator) typesIdentical(a, b *analyze.TypeInfo) bool {
 		return false
 	}
 
-	return a.ID == b.ID && a.Kind == b.Kind
+	if a.Kind != b.Kind {
+		return false
+	}
+
+	// For pointer, slice, array types - compare element types recursively
+	switch a.Kind {
+	case analyze.TypeKindPointer, analyze.TypeKindSlice, analyze.TypeKindArray:
+		return g.typesIdentical(a.ElemType, b.ElemType)
+	}
+
+	return a.ID == b.ID
 }
 
 func (g *Generator) typesConvertible(a, b *analyze.TypeInfo) bool {
@@ -1161,8 +1185,17 @@ func (g *Generator) typesConvertible(a, b *analyze.TypeInfo) bool {
 		return true
 	}
 
+	// For pointer, slice, array types - both types must be the same kind
+	// and element types must be convertible
+	if a.Kind == b.Kind {
+		switch a.Kind {
+		case analyze.TypeKindPointer, analyze.TypeKindSlice, analyze.TypeKindArray:
+			return g.typesConvertible(a.ElemType, b.ElemType)
+		}
+	}
+
 	// Same named types
-	if a.ID == b.ID {
+	if a.ID == b.ID && a.ID.Name != "" {
 		return true
 	}
 

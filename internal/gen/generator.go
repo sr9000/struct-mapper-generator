@@ -40,6 +40,17 @@ func DefaultGeneratorConfig() GeneratorConfig {
 type Generator struct {
 	config GeneratorConfig
 	graph  *analyze.TypeGraph
+	// missingTransforms stores info about missing transforms across all files.
+	// Key is the function name.
+	missingTransforms map[string]MissingTransformInfo
+}
+
+// MissingTransformInfo represents a missing transform function info.
+// Used for internal deduplication.
+type MissingTransformInfo struct {
+	Name       string
+	Args       []*analyze.TypeInfo
+	ReturnType *analyze.TypeInfo
 }
 
 // NewGenerator creates a new Generator with the given configuration.
@@ -61,6 +72,9 @@ func (g *Generator) Generate(p *plan.ResolvedMappingPlan) ([]GeneratedFile, erro
 	g.graph = p.TypeGraph
 	var files []GeneratedFile
 
+	// Reset missing transforms for this run
+	g.missingTransforms = make(map[string]MissingTransformInfo)
+
 	for _, pair := range p.TypePairs {
 		file, err := g.generateTypePair(&pair)
 		if err != nil {
@@ -71,7 +85,84 @@ func (g *Generator) Generate(p *plan.ResolvedMappingPlan) ([]GeneratedFile, erro
 		files = append(files, *file)
 	}
 
+	// Generate missing transforms file if needed
+	if len(g.missingTransforms) > 0 {
+		file, err := g.generateMissingTransformsFile()
+		if err != nil {
+			return nil, fmt.Errorf("generating missing transforms: %w", err)
+		}
+		files = append(files, *file)
+	}
+
 	return files, nil
+}
+
+// generateMissingTransformsFile generates a shared file for missing transforms.
+func (g *Generator) generateMissingTransformsFile() (*GeneratedFile, error) {
+	data := &templateData{
+		PackageName: g.config.PackageName,
+		Filename:    "missing_transforms.go",
+	}
+
+	imports := make(map[string]importSpec)
+
+	// Convert g.missingTransforms to slice for template
+	var missing []MissingTransform
+
+	// Sorted iteration to ensure deterministic output
+	var keys []string
+	for k := range g.missingTransforms {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, name := range keys {
+		info := g.missingTransforms[name]
+
+		var argTypes []string
+		for _, argInfo := range info.Args {
+			argTypes = append(argTypes, g.typeRefString(argInfo, imports))
+		}
+
+		returnType := g.typeRefString(info.ReturnType, imports)
+
+		missing = append(missing, MissingTransform{
+			Name:       info.Name,
+			Args:       argTypes,
+			ReturnType: returnType,
+		})
+	}
+
+	data.MissingTransforms = missing
+
+	// Convert imports map to sorted slice
+	for _, imp := range imports {
+		data.Imports = append(data.Imports, imp)
+	}
+	sort.Slice(data.Imports, func(i, j int) bool {
+		return data.Imports[i].Path < data.Imports[j].Path
+	})
+
+	var buf bytes.Buffer
+	if err := missingTransformsTemplate.Execute(&buf, data); err != nil {
+		return nil, fmt.Errorf("executing template: %w", err)
+	}
+
+	formatted, err := format.Source(buf.Bytes())
+	if err != nil {
+		if g.config.OutputDir != "" {
+			_ = writeDebugUnformatted(g.config.OutputDir, data.Filename, buf.Bytes())
+		}
+		return &GeneratedFile{
+			Filename: data.Filename,
+			Content:  buf.Bytes(),
+		}, fmt.Errorf("formatting code: %w", err)
+	}
+
+	return &GeneratedFile{
+		Filename: data.Filename,
+		Content:  formatted,
+	}, nil
 }
 
 // generateTypePair generates code for a single type pair.
@@ -259,8 +350,7 @@ func (g *Generator) buildTemplateData(pair *plan.ResolvedTypePair) *templateData
 	g.collectNestedCasters(data, pair, imports)
 
 	// Identify missing transforms
-	// Pass imports so that type resolution knows about aliases
-	data.MissingTransforms = g.identifyMissingTransforms(pair, imports)
+	g.identifyMissingTransforms(pair)
 
 	// Convert imports map to sorted slice
 	for _, imp := range imports {
@@ -759,9 +849,10 @@ func (g *Generator) buildTransformArgs(paths []mapping.FieldPath, pair *plan.Res
 // identifyMissingTransforms finds referenced transforms that are not imported or defined.
 func (g *Generator) identifyMissingTransforms(
 	pair *plan.ResolvedTypePair,
-	imports map[string]importSpec,
-) []MissingTransform {
-	var missing []MissingTransform
+) {
+	if g.missingTransforms == nil {
+		g.missingTransforms = make(map[string]MissingTransformInfo)
+	}
 
 	seen := make(map[string]bool)
 
@@ -776,52 +867,52 @@ func (g *Generator) identifyMissingTransforms(
 		}
 
 		if !seen[m.Transform] {
+			// Check if we already have this transform in the global map
+			if _, exists := g.missingTransforms[m.Transform]; exists {
+				seen[m.Transform] = true
+				continue
+			}
+
 			// Determine argument types
-			var argTypes []string
+			var argInfos []*analyze.TypeInfo
 
 			for _, sp := range m.SourcePaths {
-				typ := g.getFieldTypeString(pair.SourceType, sp.String(), imports)
-				argTypes = append(argTypes, typ)
+				info := g.getFieldTypeInfo(pair.SourceType, sp.String())
+				argInfos = append(argInfos, info)
 			}
 
 			// Also add 'extra' types if any
 			for _, exp := range m.Extra {
-				var typ string
+				var info *analyze.TypeInfo
 
 				switch {
 				case exp.Def.Source != "":
-					typ = g.getFieldTypeString(pair.SourceType, exp.Def.Source, imports)
+					info = g.getFieldTypeInfo(pair.SourceType, exp.Def.Source)
 				case exp.Def.Target != "":
 					// Reference to target type field?
-					typ = g.getFieldTypeString(pair.TargetType, exp.Def.Target, imports)
+					info = g.getFieldTypeInfo(pair.TargetType, exp.Def.Target)
 				default:
 					// Fallback
-					typ = "interface{}"
+					info = nil
 				}
 
-				argTypes = append(argTypes, typ)
+				argInfos = append(argInfos, info)
 			}
 
 			// Determine return type
-			returnType := "interface{}"
+			var returnInfo *analyze.TypeInfo
 			if len(m.TargetPaths) > 0 {
-				returnType = g.getFieldTypeString(pair.TargetType, m.TargetPaths[0].String(), imports)
+				returnInfo = g.getFieldTypeInfo(pair.TargetType, m.TargetPaths[0].String())
 			}
 
-			missing = append(missing, MissingTransform{
+			g.missingTransforms[m.Transform] = MissingTransformInfo{
 				Name:       m.Transform,
-				Args:       argTypes,
-				ReturnType: returnType,
-			})
+				Args:       argInfos,
+				ReturnType: returnInfo,
+			}
 			seen[m.Transform] = true
 		}
 	}
-
-	sort.Slice(missing, func(i, j int) bool {
-		return missing[i].Name < missing[j].Name
-	})
-
-	return missing
 }
 
 // getPkgName returns the package name for a given package path.
@@ -1091,4 +1182,23 @@ func {{.FunctionName}}(in {{.SourceType}}{{range .ExtraArgs}}, {{.Name}} {{.Type
 }
 
 {{end}}{{end}}
+`))
+
+var missingTransformsTemplate = template.Must(template.New("missing").Parse(`// Code generated by caster-generator. DO NOT EDIT.
+
+package {{.PackageName}}
+
+{{if .Imports}}
+import (
+{{range .Imports}}	{{if .Alias}}{{.Alias}} {{end}}"{{.Path}}"
+{{end}})
+{{end}}
+
+// Missing transforms. Ideally, these should be implemented in your project or defined as transforms in map.yaml
+
+{{range .MissingTransforms}}func {{.Name}}({{range $index, $arg := .Args}}{{if $index}}, {{end}}v{{$index}} {{$arg}}{{end}}) {{.ReturnType}} {
+	panic("transform {{.Name}} not implemented")
+}
+
+{{end}}
 `))

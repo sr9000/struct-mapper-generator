@@ -193,6 +193,9 @@ Options:
 	toType := fs.String("to", "", "Target type (e.g., warehouse.Order) - required if no mapping file")
 	outFile := fs.String("out", "", "Output YAML file (default: stdout)")
 	minConfidence := fs.Float64("min-confidence", 0.7, "Minimum confidence for auto-matching (0.0-1.0)")
+	minGap := fs.Float64("min-gap", 0.15, "Minimum score gap between top candidates for auto-accept")
+	ambiguityThreshold := fs.Float64("ambiguity-threshold", 0.1, "Score difference threshold for marking ambiguity")
+	maxCandidates := fs.Int("max-candidates", 5, "Maximum number of candidates to include in suggestions")
 
 	if err := fs.Parse(args); err != nil {
 		os.Exit(1)
@@ -284,6 +287,9 @@ Options:
 	// Run resolution with auto-matching
 	config := plan.DefaultConfig()
 	config.MinConfidence = *minConfidence
+	config.MinGap = *minGap
+	config.AmbiguityThreshold = *ambiguityThreshold
+	config.MaxCandidates = *maxCandidates
 	resolver := plan.NewResolver(graph, mappingDef, config)
 
 	resolvedPlan, err := resolver.Resolve()
@@ -292,8 +298,14 @@ Options:
 		os.Exit(1)
 	}
 
-	// Export suggestions as YAML
-	yamlData, err := plan.ExportSuggestionsYAML(resolvedPlan)
+	// Export suggestions as YAML with threshold info in comments
+	exportConfig := plan.ExportConfig{
+		MinConfidence:           *minConfidence,
+		MinGap:                  *minGap,
+		AmbiguityThreshold:      *ambiguityThreshold,
+		IncludeRejectedComments: true,
+	}
+	yamlData, err := plan.ExportSuggestionsYAMLWithConfig(resolvedPlan, exportConfig)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error exporting suggestions: %v\n", err)
 		os.Exit(1)

@@ -42,7 +42,7 @@ func BuildRegistry(mf *MappingFile, graph *analyze.TypeGraph) (*TransformRegistr
 		// Resolve source type
 		var sourceType *analyze.TypeInfo
 		if def.SourceType != "" && !isBasicTypeName(def.SourceType) {
-			sourceType = resolveTypeID(def.SourceType, graph)
+			sourceType = ResolveTypeID(def.SourceType, graph)
 			if sourceType == nil {
 				errs = append(errs, fmt.Errorf(
 					"transform %q: source type %q not found",
@@ -53,7 +53,7 @@ func BuildRegistry(mf *MappingFile, graph *analyze.TypeGraph) (*TransformRegistr
 		// Resolve target type
 		var targetType *analyze.TypeInfo
 		if def.TargetType != "" && !isBasicTypeName(def.TargetType) {
-			targetType = resolveTypeID(def.TargetType, graph)
+			targetType = ResolveTypeID(def.TargetType, graph)
 			if targetType == nil {
 				errs = append(errs, fmt.Errorf(
 					"transform %q: target type %q not found",

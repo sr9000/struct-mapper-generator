@@ -1043,19 +1043,3 @@ func (r *Resolver) sortMappings(result *ResolvedTypePair) {
 		return iKey < jKey
 	})
 }
-
-func isGenerated(t *analyze.TypeInfo) bool {
-	if t == nil {
-		return false
-	}
-
-	if t.IsGenerated {
-		return true
-	}
-
-	if t.Kind == analyze.TypeKindPointer && t.ElemType != nil {
-		return isGenerated(t.ElemType)
-	}
-
-	return false
-}

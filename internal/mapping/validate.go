@@ -52,6 +52,12 @@ func Validate(mf *MappingFile, graph *analyze.TypeGraph) *diagnostic.Diagnostics
 
 		dstT := ResolveTypeID(tm.Target, graph)
 		if dstT == nil {
+			// If GenerateTarget is true, skip target type validation
+			// The target type will be generated during resolution
+			if tm.GenerateTarget {
+				// Skip field validation against target for generated types
+				continue
+			}
 			res.AddError("target_type_not_found", fmt.Sprintf("target type %q not found", tm.Target), tpStr, tm.Target)
 			continue
 		}

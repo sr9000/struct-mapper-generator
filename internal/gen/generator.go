@@ -303,6 +303,11 @@ func (g *Generator) buildTemplateData(pair *plan.ResolvedTypePair) *templateData
 	srcPkgAlias := g.getPkgName(pair.SourceType.ID.PkgPath)
 	tgtPkgAlias := g.getPkgName(pair.TargetType.ID.PkgPath)
 
+	// For generated targets, don't use package prefix (type is generated in same package)
+	if pair.IsGeneratedTarget {
+		tgtPkgAlias = ""
+	}
+
 	data := &templateData{
 		PackageName:      g.config.PackageName,
 		Filename:         g.filename(pair),
@@ -331,7 +336,10 @@ func (g *Generator) buildTemplateData(pair *plan.ResolvedTypePair) *templateData
 	// Collect imports
 	imports := make(map[string]importSpec)
 	g.addImport(imports, pair.SourceType.ID.PkgPath)
-	g.addImport(imports, pair.TargetType.ID.PkgPath)
+	// Don't add import for generated target types
+	if !pair.IsGeneratedTarget {
+		g.addImport(imports, pair.TargetType.ID.PkgPath)
+	}
 
 	// Generate struct definition if needed
 	if structDef, err := g.GenerateStruct(pair, imports); err == nil {
@@ -1074,6 +1082,10 @@ func (g *Generator) typeRefString(t *analyze.TypeInfo, imports map[string]import
 		return t.GoType.String()
 
 	case analyze.TypeKindStruct, analyze.TypeKindExternal, analyze.TypeKindAlias:
+		// For generated types, don't add package prefix (they're in the same package)
+		if t.IsGenerated {
+			return t.ID.Name
+		}
 		if t.ID.PkgPath != "" {
 			g.addImport(imports, t.ID.PkgPath)
 
@@ -1168,7 +1180,10 @@ import (
 {{range .Imports}}	{{if .Alias}}{{.Alias}} {{end}}"{{.Path}}"
 {{end}})
 {{end}}
-
+{{if .StructDef}}
+// Generated target type
+{{.StructDef}}
+{{end}}
 // {{.FunctionName}} converts {{.SourceType}} to {{.TargetType}}.
 func {{.FunctionName}}(in {{.SourceType}}{{range .ExtraArgs}}, {{.Name}} {{.Type}}{{end}}) {{.TargetType}} {
 	out := {{.TargetType}}{}

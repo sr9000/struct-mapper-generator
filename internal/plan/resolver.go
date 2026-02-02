@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	"caster-generator/internal/analyze"
 	"caster-generator/internal/diagnostic"
@@ -92,6 +93,10 @@ func (r *Resolver) Resolve() (*ResolvedMappingPlan, error) {
 		return nil, errors.New("mapping definition is required")
 	}
 
+	// First pass: pre-create all virtual target types so they're available
+	// for nested type detection and resolution
+	r.preCreateVirtualTypes()
+
 	// Process each type mapping
 	for _, tm := range r.mappingDef.TypeMappings {
 		resolved, err := r.resolveTypeMapping(&tm, &plan.Diagnostics)
@@ -114,6 +119,35 @@ func (r *Resolver) Resolve() (*ResolvedMappingPlan, error) {
 	}
 
 	return plan, nil
+}
+
+// preCreateVirtualTypes creates stub TypeInfo entries for all virtual target types
+// before resolution begins. This ensures they're available for nested type detection.
+func (r *Resolver) preCreateVirtualTypes() {
+	if r.mappingDef == nil {
+		return
+	}
+
+	for _, tm := range r.mappingDef.TypeMappings {
+		if !tm.GenerateTarget {
+			continue
+		}
+
+		// Check if source type exists
+		sourceType := mapping.ResolveTypeID(tm.Source, r.graph)
+		if sourceType == nil {
+			continue
+		}
+
+		// Check if target type already exists (shouldn't for generate_target)
+		targetID := parseTypeID(tm.Target)
+		if r.graph.GetType(targetID) != nil {
+			continue
+		}
+
+		// Create the virtual type (full structure will be populated in resolveTypeMapping)
+		r.createVirtualTargetType(&tm, sourceType)
+	}
 }
 
 // resolveTypePairRecursive resolves a nested type pair.
@@ -188,8 +222,18 @@ func (r *Resolver) resolveTypeMapping(
 	}
 
 	targetType := mapping.ResolveTypeID(tm.Target, r.graph)
+	isGeneratedTarget := false
 	if targetType == nil {
-		return nil, fmt.Errorf("target type %q not found", tm.Target)
+		if tm.GenerateTarget {
+			// Create virtual target type
+			targetType = r.createVirtualTargetType(tm, sourceType)
+			isGeneratedTarget = true
+		} else {
+			return nil, fmt.Errorf("target type %q not found", tm.Target)
+		}
+	} else if tm.GenerateTarget {
+		// Target type was pre-created in preCreateVirtualTypes
+		isGeneratedTarget = true
 	}
 
 	typePairStr := fmt.Sprintf("%s->%s", sourceType.ID, targetType.ID)
@@ -200,12 +244,13 @@ func (r *Resolver) resolveTypeMapping(
 	}
 
 	result := &ResolvedTypePair{
-		SourceType:      sourceType,
-		TargetType:      targetType,
-		Mappings:        []ResolvedFieldMapping{},
-		UnmappedTargets: []UnmappedField{},
-		NestedPairs:     []NestedConversion{},
-		Requires:        tm.Requires, // Preserve requires
+		SourceType:        sourceType,
+		TargetType:        targetType,
+		Mappings:          []ResolvedFieldMapping{},
+		UnmappedTargets:   []UnmappedField{},
+		NestedPairs:       []NestedConversion{},
+		Requires:          tm.Requires, // Preserve requires
+		IsGeneratedTarget: isGeneratedTarget,
 	}
 
 	// Pre-cache to prevent infinite recursion for cyclic types
@@ -458,6 +503,13 @@ func (r *Resolver) determineStrategyWithHint(
 		return StrategyTransform, "final (no introspection)"
 	}
 
+	// For generated types, we can't use Go type compatibility check
+	// Instead, use structural matching based on Kind
+	if sourceFieldType.IsGenerated || targetFieldType.IsGenerated ||
+		sourceFieldType.GoType == nil || targetFieldType.GoType == nil {
+		return r.determineStrategyByKind(sourceFieldType, targetFieldType, hint)
+	}
+
 	// Check type compatibility
 	compat := match.ScorePointerCompatibility(sourceFieldType.GoType, targetFieldType.GoType)
 
@@ -473,6 +525,58 @@ func (r *Resolver) determineStrategyWithHint(
 	default:
 		return r.determineIncompatibleStrategy(sourceFieldType, targetFieldType, hint)
 	}
+}
+
+// determineStrategyByKind determines conversion strategy based on type kinds
+// (used for generated types where GoType is not available).
+func (r *Resolver) determineStrategyByKind(
+	sourceFieldType, targetFieldType *analyze.TypeInfo,
+	hint mapping.IntrospectionHint,
+) (ConversionStrategy, string) {
+	srcKind := sourceFieldType.Kind
+	tgtKind := targetFieldType.Kind
+
+	// Same kind - direct assign or compatible
+	if srcKind == tgtKind {
+		switch srcKind {
+		case analyze.TypeKindBasic:
+			// For basic types with same name, direct assign
+			if sourceFieldType.ID.Name == targetFieldType.ID.Name {
+				return StrategyDirectAssign, "identical"
+			}
+			return StrategyConvert, "convertible"
+		case analyze.TypeKindStruct:
+			if hint == mapping.HintDive {
+				return StrategyNestedCast, "nested struct (dive)"
+			}
+			return StrategyNestedCast, "nested struct"
+		case analyze.TypeKindSlice, analyze.TypeKindArray:
+			if hint == mapping.HintDive {
+				return StrategySliceMap, "slice map (dive)"
+			}
+			return StrategySliceMap, "slice map"
+		case analyze.TypeKindPointer:
+			// Check element types
+			if sourceFieldType.ElemType != nil && targetFieldType.ElemType != nil {
+				if sourceFieldType.ElemType.Kind == analyze.TypeKindStruct &&
+					targetFieldType.ElemType.Kind == analyze.TypeKindStruct {
+					return StrategyPointerNestedCast, "pointer nested cast"
+				}
+			}
+			return StrategyDirectAssign, "pointer"
+		}
+		return StrategyDirectAssign, "same kind"
+	}
+
+	// Different kinds - handle common cases
+	if srcKind == analyze.TypeKindPointer && tgtKind != analyze.TypeKindPointer {
+		return StrategyPointerDeref, "pointer deref"
+	}
+	if srcKind != analyze.TypeKindPointer && tgtKind == analyze.TypeKindPointer {
+		return StrategyPointerWrap, "pointer wrap"
+	}
+
+	return StrategyTransform, "incompatible kinds"
 }
 
 func (r *Resolver) determineNeedsTransformStrategy(
@@ -1042,4 +1146,218 @@ func (r *Resolver) sortMappings(result *ResolvedTypePair) {
 
 		return iKey < jKey
 	})
+}
+
+// createVirtualTargetType creates a virtual TypeInfo for a generated target type.
+// It synthesizes the target structure from the mapping definition.
+func (r *Resolver) createVirtualTargetType(tm *mapping.TypeMapping, sourceType *analyze.TypeInfo) *analyze.TypeInfo {
+	// Parse target type ID from string
+	targetID := parseTypeID(tm.Target)
+
+	// Create virtual type
+	targetType := &analyze.TypeInfo{
+		ID:          targetID,
+		Kind:        analyze.TypeKindStruct,
+		IsGenerated: true,
+		Fields:      []analyze.FieldInfo{},
+	}
+
+	// Build field index for source type
+	sourceFields := make(map[string]*analyze.FieldInfo)
+	for i := range sourceType.Fields {
+		sourceFields[sourceType.Fields[i].Name] = &sourceType.Fields[i]
+	}
+
+	// Track which fields we've added
+	addedFields := make(map[string]bool)
+
+	// Helper to potentially remap a type if there's a generated target mapping for it
+	remapType := func(srcType *analyze.TypeInfo) *analyze.TypeInfo {
+		if srcType == nil {
+			return srcType
+		}
+		return r.remapToGeneratedType(srcType)
+	}
+
+	// Process 121 mappings
+	for sourcePath, targetPath := range tm.OneToOne {
+		if addedFields[targetPath] {
+			continue
+		}
+		if srcField, ok := sourceFields[sourcePath]; ok {
+			targetType.Fields = append(targetType.Fields, analyze.FieldInfo{
+				Name:     targetPath,
+				Exported: true,
+				Type:     remapType(srcField.Type),
+				Index:    len(targetType.Fields),
+			})
+			addedFields[targetPath] = true
+		}
+	}
+
+	// Process explicit field mappings
+	for _, fm := range tm.Fields {
+		for _, t := range fm.Target {
+			targetName := t.Path
+			if addedFields[targetName] {
+				continue
+			}
+			// Try to infer type from source
+			var fieldType *analyze.TypeInfo
+			for _, s := range fm.Source {
+				if srcField, ok := sourceFields[s.Path]; ok {
+					fieldType = srcField.Type
+					break
+				}
+			}
+			if fieldType == nil {
+				// Default to interface{} if we can't infer
+				fieldType = &analyze.TypeInfo{
+					ID:   analyze.TypeID{Name: "interface{}"},
+					Kind: analyze.TypeKindBasic,
+				}
+			}
+			targetType.Fields = append(targetType.Fields, analyze.FieldInfo{
+				Name:     targetName,
+				Exported: true,
+				Type:     remapType(fieldType),
+				Index:    len(targetType.Fields),
+			})
+			addedFields[targetName] = true
+		}
+	}
+
+	// Process auto mappings
+	for _, fm := range tm.Auto {
+		for _, t := range fm.Target {
+			targetName := t.Path
+			if addedFields[targetName] {
+				continue
+			}
+			// Try to infer type from source
+			var fieldType *analyze.TypeInfo
+			for _, s := range fm.Source {
+				if srcField, ok := sourceFields[s.Path]; ok {
+					fieldType = srcField.Type
+					break
+				}
+			}
+			if fieldType == nil {
+				fieldType = &analyze.TypeInfo{
+					ID:   analyze.TypeID{Name: "interface{}"},
+					Kind: analyze.TypeKindBasic,
+				}
+			}
+			targetType.Fields = append(targetType.Fields, analyze.FieldInfo{
+				Name:     targetName,
+				Exported: true,
+				Type:     remapType(fieldType),
+				Index:    len(targetType.Fields),
+			})
+			addedFields[targetName] = true
+		}
+	}
+
+	// Add to graph for future lookups
+	r.graph.Types[targetID] = targetType
+
+	return targetType
+}
+
+// remapToGeneratedType checks if there's a generated target type mapping for the given source type
+// and returns the corresponding target type reference. For slices/pointers, it recursively remaps the element type.
+func (r *Resolver) remapToGeneratedType(srcType *analyze.TypeInfo) *analyze.TypeInfo {
+	if srcType == nil || r.mappingDef == nil {
+		return srcType
+	}
+
+	// Handle pointer types - recursively remap element
+	if srcType.Kind == analyze.TypeKindPointer && srcType.ElemType != nil {
+		remappedElem := r.remapToGeneratedType(srcType.ElemType)
+		if remappedElem != srcType.ElemType {
+			return &analyze.TypeInfo{
+				Kind:        analyze.TypeKindPointer,
+				ElemType:    remappedElem,
+				IsGenerated: true,
+			}
+		}
+		return srcType
+	}
+
+	// Handle slice types - recursively remap element
+	if srcType.Kind == analyze.TypeKindSlice && srcType.ElemType != nil {
+		remappedElem := r.remapToGeneratedType(srcType.ElemType)
+		if remappedElem != srcType.ElemType {
+			return &analyze.TypeInfo{
+				Kind:        analyze.TypeKindSlice,
+				ElemType:    remappedElem,
+				IsGenerated: true,
+			}
+		}
+		return srcType
+	}
+
+	// Handle array types - recursively remap element
+	if srcType.Kind == analyze.TypeKindArray && srcType.ElemType != nil {
+		remappedElem := r.remapToGeneratedType(srcType.ElemType)
+		if remappedElem != srcType.ElemType {
+			return &analyze.TypeInfo{
+				Kind:        analyze.TypeKindArray,
+				ElemType:    remappedElem,
+				IsGenerated: true,
+			}
+		}
+		return srcType
+	}
+
+	// For struct types, look for a matching generate_target mapping
+	if srcType.Kind == analyze.TypeKindStruct && srcType.ID.Name != "" {
+		for _, otherTM := range r.mappingDef.TypeMappings {
+			if !otherTM.GenerateTarget {
+				continue
+			}
+			// Check if this mapping's source matches our type
+			otherSource := mapping.ResolveTypeID(otherTM.Source, r.graph)
+			if otherSource != nil && otherSource.ID == srcType.ID {
+				// Found a matching mapping - return a reference to the generated target type
+				targetID := parseTypeID(otherTM.Target)
+				// Check if we already have this type in the graph
+				if existing := r.graph.GetType(targetID); existing != nil {
+					return existing
+				}
+				// Create the virtual type and add it to the graph
+				// This ensures all references use the same type object
+				otherSourceType := mapping.ResolveTypeID(otherTM.Source, r.graph)
+				if otherSourceType != nil {
+					return r.createVirtualTargetType(&otherTM, otherSourceType)
+				}
+				// Fallback: create a stub type reference
+				return &analyze.TypeInfo{
+					ID:          targetID,
+					Kind:        analyze.TypeKindStruct,
+					IsGenerated: true,
+				}
+			}
+		}
+	}
+
+	return srcType
+}
+
+// parseTypeID parses a type ID string into TypeID struct.
+func parseTypeID(typeIDStr string) analyze.TypeID {
+	// Handle name-only case
+	if !strings.Contains(typeIDStr, ".") {
+		return analyze.TypeID{Name: typeIDStr}
+	}
+
+	lastDot := strings.LastIndex(typeIDStr, ".")
+	if lastDot < 0 {
+		return analyze.TypeID{Name: typeIDStr}
+	}
+
+	return analyze.TypeID{
+		PkgPath: typeIDStr[:lastDot],
+		Name:    typeIDStr[lastDot+1:],
+	}
 }

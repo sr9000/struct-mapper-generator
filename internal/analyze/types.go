@@ -135,5 +135,6 @@ func (g *TypeGraph) GetType(id TypeID) *TypeInfo {
 type PackageInfo struct {
 	Path  string   // Import path
 	Name  string   // Package name
+	Dir   string   // Directory on disk
 	Types []TypeID // Named types defined in this package
 }

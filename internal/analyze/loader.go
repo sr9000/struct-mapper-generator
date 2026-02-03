@@ -3,6 +3,7 @@ package analyze
 import (
 	"fmt"
 	"go/types"
+	"path/filepath"
 	"reflect"
 
 	"golang.org/x/tools/go/packages"
@@ -73,6 +74,10 @@ func (a *Analyzer) processPackage(pkg *packages.Package) {
 	pkgInfo := &PackageInfo{
 		Path: pkg.PkgPath,
 		Name: pkg.Name,
+	}
+
+	if len(pkg.GoFiles) > 0 {
+		pkgInfo.Dir = filepath.Dir(pkg.GoFiles[0])
 	}
 
 	scope := pkg.Types.Scope()

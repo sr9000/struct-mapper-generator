@@ -45,7 +45,7 @@ cat > "${stages_dir}/stage1_mapping.yaml" << 'EOF'
 version: "1"
 
 mappings:
-  # Source -> Target (generated type)
+  # Source -> Target (generated type in output package)
   - source: caster-generator/examples/virtual.Source
     target: caster-generator/examples/virtual.Target
     generate_target: true
@@ -61,7 +61,7 @@ mappings:
       - source: Items
         target: Items
 
-  # SourceItem -> TargetItem (generated nested type)
+  # SourceItem -> TargetItem (generated type in output package)
   - source: caster-generator/examples/virtual.SourceItem
     target: caster-generator/examples/virtual.TargetItem
     generate_target: true

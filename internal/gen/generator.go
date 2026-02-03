@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"go/format"
+	"path/filepath"
 	"sort"
 	"strings"
 	"text/template"
@@ -43,6 +44,15 @@ type Generator struct {
 	// missingTransforms stores info about missing transforms across all files.
 	// Key is the function name.
 	missingTransforms map[string]MissingTransformInfo
+
+	// missingTypes stores info about missing target types that need to be generated
+	// in their respective packages.
+	// Key is the directory path.
+	missingTypes map[string][]MissingTypeInfo
+
+	// contextPkgPath is the package path currently being generated into.
+	// Used to suppress package prefixes for types in the same package.
+	contextPkgPath string
 }
 
 // MissingTransformInfo represents a missing transform function info.
@@ -51,6 +61,13 @@ type MissingTransformInfo struct {
 	Name       string
 	Args       []*analyze.TypeInfo
 	ReturnType *analyze.TypeInfo
+}
+
+// MissingTypeInfo represents a missing type definition.
+type MissingTypeInfo struct {
+	PkgName   string
+	StructDef string
+	Imports   []importSpec
 }
 
 // NewGenerator creates a new Generator with the given configuration.
@@ -75,6 +92,7 @@ func (g *Generator) Generate(p *plan.ResolvedMappingPlan) ([]GeneratedFile, erro
 
 	// Reset missing transforms for this run
 	g.missingTransforms = make(map[string]MissingTransformInfo)
+	g.missingTypes = make(map[string][]MissingTypeInfo)
 
 	for _, pair := range p.TypePairs {
 		file, err := g.generateTypePair(&pair)
@@ -94,6 +112,15 @@ func (g *Generator) Generate(p *plan.ResolvedMappingPlan) ([]GeneratedFile, erro
 		}
 
 		files = append(files, *file)
+	}
+
+	// Generate missing types files
+	if len(g.missingTypes) > 0 {
+		missingFiles, err := g.generateMissingTypesFiles()
+		if err != nil {
+			return nil, fmt.Errorf("generating missing types: %w", err)
+		}
+		files = append(files, missingFiles...)
 	}
 
 	return files, nil
@@ -169,6 +196,133 @@ func (g *Generator) generateMissingTransformsFile() (*GeneratedFile, error) {
 		Content:  formatted,
 	}, nil
 }
+
+// generateMissingTypesFiles generates missing_types.go files in respective directories.
+func (g *Generator) generateMissingTypesFiles() ([]GeneratedFile, error) {
+	var files []GeneratedFile
+
+	for dir, infos := range g.missingTypes {
+		if len(infos) == 0 {
+			continue
+		}
+
+		// Group import specs
+		imports := make(map[string]importSpec)
+		var structDefs []string
+		pkgName := infos[0].PkgName
+
+		for _, info := range infos {
+			structDefs = append(structDefs, info.StructDef)
+			for _, imp := range info.Imports {
+				// Don't import the package we are generating code in
+				if imp.Path == "" {
+					continue
+				}
+				// We need to check if the import path matches the package path of THIS file
+				// But we don't have easy access to THIS package path, only dir.
+				// However, regular Go imports rules apply.
+				// If a struct refers to "virtual.TargetItem" and we are IN "virtual", we should NOT import "virtual".
+
+				// Checking if import path ends with pkgName is a weak heuristic, but
+				// checking if known PkgPath maps to 'dir' is better.
+				if pkgInfo, ok := g.graph.Packages[imp.Path]; ok && pkgInfo.Dir == dir {
+					continue
+				}
+
+				imports[imp.Path] = imp
+			}
+		}
+
+		var sortedImports []importSpec
+		for _, imp := range imports {
+			sortedImports = append(sortedImports, imp)
+		}
+		sort.Slice(sortedImports, func(i, j int) bool {
+			return sortedImports[i].Path < sortedImports[j].Path
+		})
+
+		data := &MissingTypesTemplateData{
+			PackageName: pkgName,
+			Imports:     sortedImports,
+			StructDefs:  structDefs,
+		}
+
+		var buf bytes.Buffer
+		if err := missingTypesTemplate.Execute(&buf, data); err != nil {
+			return nil, fmt.Errorf("executing missing types template for %s: %w", dir, err)
+		}
+
+		formatted, err := format.Source(buf.Bytes())
+		if err != nil {
+			if g.config.OutputDir != "" {
+				_ = writeDebugUnformatted(g.config.OutputDir, "missing_types_debug.go", buf.Bytes())
+			}
+			return nil, fmt.Errorf("formatting missing types code for %s: %w", dir, err)
+		}
+
+		// The filename is relative to the workspace, but WriteFiles expects relative to OutputDir?
+		// No, WriteFiles uses config.OutputDir.
+		// Use absolute path trick? Or relative path back traversal?
+		// WriteFiles code: outputPath := filepath.Join(outputDir, file.Filename)
+		// If file.Filename is absolute, Join handles it?
+		// "If any element is an absolute path, Join treats it as relative to the root unless it is the first element." - No, "Join joins .. and cleans".
+		// If I return absolute path as filename?
+		// /abs/path/missing_types.go
+		// outputDir is /.../generated
+		// filepath.Join(outputDir, absPath) might result in /.../generated/abs/path/missing_types.go which is WRONG.
+
+		// I need a way to tell Generator to write to a specific location.
+		// GeneratedFile relies on Writer.
+		// I should use `filepath.Abs` on dir, then try to make it relative to `OutputDir`?
+		// Or update Writer to handle absolute paths.
+
+		// Let's assume writer handles it or I can supply a path relative to CWD if OutputDir is "."?
+		// The `GeneratedFile` struct is simple.
+
+		// If I assume `dir` is absolute (from loader), I can pass `dir + "/missing_types.go"` as Filename.
+		// But I need `WriteFiles` to respect it.
+		// `filepath.Join("/a/b", "/c/d")` -> `/a/b/c/d`.
+
+		// I will modify `writer.go` later to handle absolute paths?
+		// Or I can calculate relative path from OutputDir to `dir`.
+
+		relPath, relErr := filepath.Rel(g.config.OutputDir, dir)
+		if relErr != nil {
+			// Fallback to absolute path and hope caller handles it or Writer is updated
+			relPath = filepath.Join(dir, "missing_types.go")
+		} else {
+			relPath = filepath.Join(relPath, "missing_types.go")
+		}
+
+		files = append(files, GeneratedFile{
+			Filename: relPath, // This will be joined with OutputDir
+			Content:  formatted,
+		})
+	}
+
+	return files, nil
+}
+
+type MissingTypesTemplateData struct {
+	PackageName string
+	Imports     []importSpec
+	StructDefs  []string
+}
+
+var missingTypesTemplate = template.Must(template.New("missing_types").Parse(`// Code generated by caster-generator. DO NOT EDIT.
+
+package {{.PackageName}}
+
+{{if .Imports}}
+import (
+{{range .Imports}}	{{if .Alias}}{{.Alias}} {{end}}"{{.Path}}"
+{{end}})
+{{end}}
+
+{{range .StructDefs}}
+{{.}}
+{{end}}
+`))
 
 // generateTypePair generates code for a single type pair.
 func (g *Generator) generateTypePair(pair *plan.ResolvedTypePair) (*GeneratedFile, error) {
@@ -342,9 +496,58 @@ func (g *Generator) buildTemplateData(pair *plan.ResolvedTypePair) *templateData
 	}
 
 	// Generate struct definition if needed
-	if structDef, err := g.GenerateStruct(pair, imports); err == nil {
-		data.StructDef = structDef
+	// First, decide if we are moving the struct definition
+	moveStruct := false
+	targetPkgPath := pair.TargetType.ID.PkgPath
+
+	// Logic: If the target has a defined package path that is NOT empty,
+	// and we can find its physical directory, we move it there.
+	if pair.IsGeneratedTarget && targetPkgPath != "" {
+		if pkgInfo, ok := g.graph.Packages[targetPkgPath]; ok && pkgInfo.Dir != "" {
+			moveStruct = true
+		}
 	}
+
+	// Set context package path for struct generation to ensure correct type references
+	if moveStruct {
+		g.contextPkgPath = targetPkgPath
+	} else {
+		g.contextPkgPath = ""
+	}
+
+	// Use a temporary map to capture imports for the struct
+	structImports := make(map[string]importSpec)
+	if structDef, err := g.GenerateStruct(pair, structImports); err == nil {
+		if moveStruct {
+			// Add import to caster file manually (since we removed struct def from here)
+			g.addImport(imports, targetPkgPath)
+
+			// We also need to ensure tgtPkgAlias is set in templateData
+			tgtPkgAlias = g.getPkgName(targetPkgPath)
+			data.TargetType.Package = tgtPkgAlias
+
+			// Convert structImports map to slice for storage
+			var importedSpecs []importSpec
+			for _, spec := range structImports {
+				importedSpecs = append(importedSpecs, spec)
+			}
+
+			// Store struct def for later generation in the target package
+			dir := g.graph.Packages[targetPkgPath].Dir
+			pkgName := g.graph.Packages[targetPkgPath].Name
+			g.addMissingType(dir, pkgName, structDef, importedSpecs)
+
+		} else {
+			// Merge structImports into imports for the current file
+			for path, spec := range structImports {
+				imports[path] = spec
+			}
+			data.StructDef = structDef
+		}
+	}
+
+	// Reset context package path
+	g.contextPkgPath = ""
 
 	// Process mappings
 	for _, m := range pair.Mappings {
@@ -972,12 +1175,22 @@ func (g *Generator) filename(pair *plan.ResolvedTypePair) string {
 	srcPkg := g.getPkgName(pair.SourceType.ID.PkgPath)
 	tgtPkg := g.getPkgName(pair.TargetType.ID.PkgPath)
 
+	// For generated targets with no package path, use the output package name
+	if tgtPkg == "" && pair.IsGeneratedTarget {
+		tgtPkg = g.config.PackageName
+	}
+
 	return fmt.Sprintf("%s_%s_to_%s_%s.go", srcPkg, src, tgtPkg, tgt)
 }
 
 func (g *Generator) functionName(pair *plan.ResolvedTypePair) string {
 	srcPkg := g.capitalize(g.getPkgName(pair.SourceType.ID.PkgPath))
 	tgtPkg := g.capitalize(g.getPkgName(pair.TargetType.ID.PkgPath))
+
+	// For generated targets with no package path, use the output package name
+	if tgtPkg == "" && pair.IsGeneratedTarget {
+		tgtPkg = g.capitalize(g.config.PackageName)
+	}
 
 	return fmt.Sprintf("%s%sTo%s%s",
 		srcPkg, pair.SourceType.ID.Name,
@@ -987,6 +1200,11 @@ func (g *Generator) functionName(pair *plan.ResolvedTypePair) string {
 func (g *Generator) nestedFunctionName(src, tgt *analyze.TypeInfo) string {
 	srcPkg := g.capitalize(g.getPkgName(src.ID.PkgPath))
 	tgtPkg := g.capitalize(g.getPkgName(tgt.ID.PkgPath))
+
+	// For generated targets with no package path, use the output package name
+	if tgtPkg == "" && tgt.IsGenerated {
+		tgtPkg = g.capitalize(g.config.PackageName)
+	}
 
 	return fmt.Sprintf("%s%sTo%s%s", srcPkg, src.ID.Name, tgtPkg, tgt.ID.Name)
 }
@@ -1001,6 +1219,19 @@ func (g *Generator) addImport(imports map[string]importSpec, pkgPath string) {
 		Alias: alias,
 		Path:  pkgPath,
 	}
+}
+
+// addMissingType records a struct definition that needs to be generated in a specific package.
+func (g *Generator) addMissingType(dir, pkgName, structDef string, imports []importSpec) {
+	if g.missingTypes == nil {
+		g.missingTypes = make(map[string][]MissingTypeInfo)
+	}
+
+	g.missingTypes[dir] = append(g.missingTypes[dir], MissingTypeInfo{
+		PkgName:   pkgName,
+		StructDef: structDef,
+		Imports:   imports,
+	})
 }
 
 func (g *Generator) capitalize(s string) string {
@@ -1096,11 +1327,15 @@ func (g *Generator) typeRefString(t *analyze.TypeInfo, imports map[string]import
 		return t.GoType.String()
 
 	case analyze.TypeKindStruct, analyze.TypeKindExternal, analyze.TypeKindAlias:
-		// For generated types, don't add package prefix (they're in the same package)
-		if t.IsGenerated {
-			return t.ID.Name
-		}
+		// If the type has a package path, use it for import and qualification.
+		// Even if IsGenerated is true, if PkgPath is set, we treat it as a cross-package reference
+		// unless we are generating into that same package.
 		if t.ID.PkgPath != "" {
+			// If we are generating code IN the same package as the type, omit prefix/import.
+			if t.ID.PkgPath == g.contextPkgPath {
+				return t.ID.Name
+			}
+
 			g.addImport(imports, t.ID.PkgPath)
 
 			return g.getPkgName(t.ID.PkgPath) + "." + t.ID.Name

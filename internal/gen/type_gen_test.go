@@ -250,6 +250,7 @@ func TestGenerator_GenerateStruct_SliceOfPointerToGenerated(t *testing.T) {
 	}
 
 	gen := NewGenerator(DefaultGeneratorConfig())
+	gen.contextPkgPath = "example/warehouse"
 	imports := make(map[string]importSpec)
 
 	result, err := gen.GenerateStruct(pair, imports)

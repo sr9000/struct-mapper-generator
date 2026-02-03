@@ -14,8 +14,11 @@ import (
 
 // Strategy explanation constants.
 const (
-	explSliceMap     = "slice map"
-	explNestedStruct = "nested struct"
+	explSliceMap          = "slice map"
+	explNestedStruct      = "nested struct"
+	explPointerNestedCast = "pointer nested cast"
+	explPointerDeref      = "pointer deref"
+	explPointerWrap       = "pointer wrap"
 )
 
 // ResolutionConfig holds configuration for the resolution process.
@@ -223,6 +226,7 @@ func (r *Resolver) resolveTypeMapping(
 
 	targetType := mapping.ResolveTypeID(tm.Target, r.graph)
 	isGeneratedTarget := false
+
 	if targetType == nil {
 		if tm.GenerateTarget {
 			// Create virtual target type
@@ -515,11 +519,11 @@ func (r *Resolver) determineStrategyWithHint(
 
 	switch compat.Compatibility {
 	case match.TypeIdentical:
-		return StrategyDirectAssign, "identical"
+		return StrategyDirectAssign, match.VerdictIdentical
 	case match.TypeAssignable:
-		return StrategyDirectAssign, "assignable"
+		return StrategyDirectAssign, match.VerdictAssignable
 	case match.TypeConvertible:
-		return StrategyConvert, "convertible"
+		return StrategyConvert, match.VerdictConvertible
 	case match.TypeNeedsTransform:
 		return r.determineNeedsTransformStrategy(sourceFieldType, targetFieldType, hint)
 	default:
@@ -539,41 +543,47 @@ func (r *Resolver) determineStrategyByKind(
 	// Same kind - direct assign or compatible
 	if srcKind == tgtKind {
 		switch srcKind {
+		default:
+			return StrategyDirectAssign, "same kind"
 		case analyze.TypeKindBasic:
 			// For basic types with same name, direct assign
 			if sourceFieldType.ID.Name == targetFieldType.ID.Name {
 				return StrategyDirectAssign, "identical"
 			}
+
 			return StrategyConvert, "convertible"
 		case analyze.TypeKindStruct:
 			if hint == mapping.HintDive {
 				return StrategyNestedCast, "nested struct (dive)"
 			}
-			return StrategyNestedCast, "nested struct"
+
+			return StrategyNestedCast, explNestedStruct
 		case analyze.TypeKindSlice, analyze.TypeKindArray:
 			if hint == mapping.HintDive {
 				return StrategySliceMap, "slice map (dive)"
 			}
-			return StrategySliceMap, "slice map"
+
+			return StrategySliceMap, explSliceMap
 		case analyze.TypeKindPointer:
 			// Check element types
 			if sourceFieldType.ElemType != nil && targetFieldType.ElemType != nil {
 				if sourceFieldType.ElemType.Kind == analyze.TypeKindStruct &&
 					targetFieldType.ElemType.Kind == analyze.TypeKindStruct {
-					return StrategyPointerNestedCast, "pointer nested cast"
+					return StrategyPointerNestedCast, explPointerNestedCast
 				}
 			}
+
 			return StrategyDirectAssign, "pointer"
 		}
-		return StrategyDirectAssign, "same kind"
 	}
 
 	// Different kinds - handle common cases
 	if srcKind == analyze.TypeKindPointer && tgtKind != analyze.TypeKindPointer {
-		return StrategyPointerDeref, "pointer deref"
+		return StrategyPointerDeref, explPointerDeref
 	}
+
 	if srcKind != analyze.TypeKindPointer && tgtKind == analyze.TypeKindPointer {
-		return StrategyPointerWrap, "pointer wrap"
+		return StrategyPointerWrap, explPointerWrap
 	}
 
 	return StrategyTransform, "incompatible kinds"
@@ -585,11 +595,11 @@ func (r *Resolver) determineNeedsTransformStrategy(
 ) (ConversionStrategy, string) {
 	// Determine more specific strategy
 	if sourceFieldType.Kind == analyze.TypeKindPointer && targetFieldType.Kind != analyze.TypeKindPointer {
-		return StrategyPointerDeref, "pointer deref"
+		return StrategyPointerDeref, explPointerDeref
 	}
 
 	if sourceFieldType.Kind != analyze.TypeKindPointer && targetFieldType.Kind == analyze.TypeKindPointer {
-		return StrategyPointerWrap, "pointer wrap"
+		return StrategyPointerWrap, explPointerWrap
 	}
 
 	// Check for pointer-to-pointer struct conversions (e.g., *Node -> *NodeDTO)
@@ -599,7 +609,7 @@ func (r *Resolver) determineNeedsTransformStrategy(
 		tgtElem := targetFieldType.ElemType
 		if srcElem != nil && tgtElem != nil &&
 			srcElem.Kind == analyze.TypeKindStruct && tgtElem.Kind == analyze.TypeKindStruct {
-			return StrategyPointerNestedCast, "pointer nested cast"
+			return StrategyPointerNestedCast, explPointerNestedCast
 		}
 	}
 
@@ -644,7 +654,7 @@ func (r *Resolver) determineIncompatibleStrategy(
 		tgtElem := targetFieldType.ElemType
 		if srcElem != nil && tgtElem != nil &&
 			srcElem.Kind == analyze.TypeKindStruct && tgtElem.Kind == analyze.TypeKindStruct {
-			return StrategyPointerNestedCast, "pointer nested cast"
+			return StrategyPointerNestedCast, explPointerNestedCast
 		}
 	}
 
@@ -823,19 +833,19 @@ func (r *Resolver) autoMatchRemainingFields(
 func (r *Resolver) determineStrategyFromCandidate(cand *match.Candidate) (ConversionStrategy, string) {
 	switch cand.TypeCompat.Compatibility {
 	case match.TypeIdentical:
-		return StrategyDirectAssign, "identical"
+		return StrategyDirectAssign, match.TypeIdentical.String()
 	case match.TypeAssignable:
-		return StrategyDirectAssign, "assignable"
+		return StrategyDirectAssign, match.TypeAssignable.String()
 	case match.TypeConvertible:
-		return StrategyConvert, "convertible"
+		return StrategyConvert, match.TypeConvertible.String()
 	case match.TypeNeedsTransform:
 		// Check for specific strategies based on reason
 		if cand.TypeCompat.Reason == "requires pointer dereference" {
-			return StrategyPointerDeref, "pointer deref"
+			return StrategyPointerDeref, explPointerDeref
 		}
 
 		if cand.TypeCompat.Reason == "requires taking address" {
-			return StrategyPointerWrap, "pointer wrap"
+			return StrategyPointerWrap, explPointerWrap
 		}
 
 		// Check if source and target are both structs (nested struct conversion)
@@ -1176,6 +1186,7 @@ func (r *Resolver) createVirtualTargetType(tm *mapping.TypeMapping, sourceType *
 		if srcType == nil {
 			return srcType
 		}
+
 		return r.remapToGeneratedType(srcType)
 	}
 
@@ -1184,6 +1195,7 @@ func (r *Resolver) createVirtualTargetType(tm *mapping.TypeMapping, sourceType *
 		if addedFields[targetPath] {
 			continue
 		}
+
 		if srcField, ok := sourceFields[sourcePath]; ok {
 			targetType.Fields = append(targetType.Fields, analyze.FieldInfo{
 				Name:     targetPath,
@@ -1204,12 +1216,14 @@ func (r *Resolver) createVirtualTargetType(tm *mapping.TypeMapping, sourceType *
 			}
 			// Try to infer type from source
 			var fieldType *analyze.TypeInfo
+
 			for _, s := range fm.Source {
 				if srcField, ok := sourceFields[s.Path]; ok {
 					fieldType = srcField.Type
 					break
 				}
 			}
+
 			if fieldType == nil {
 				// Default to interface{} if we can't infer
 				fieldType = &analyze.TypeInfo{
@@ -1217,6 +1231,7 @@ func (r *Resolver) createVirtualTargetType(tm *mapping.TypeMapping, sourceType *
 					Kind: analyze.TypeKindBasic,
 				}
 			}
+
 			targetType.Fields = append(targetType.Fields, analyze.FieldInfo{
 				Name:     targetName,
 				Exported: true,
@@ -1236,18 +1251,21 @@ func (r *Resolver) createVirtualTargetType(tm *mapping.TypeMapping, sourceType *
 			}
 			// Try to infer type from source
 			var fieldType *analyze.TypeInfo
+
 			for _, s := range fm.Source {
 				if srcField, ok := sourceFields[s.Path]; ok {
 					fieldType = srcField.Type
 					break
 				}
 			}
+
 			if fieldType == nil {
 				fieldType = &analyze.TypeInfo{
 					ID:   analyze.TypeID{Name: "interface{}"},
 					Kind: analyze.TypeKindBasic,
 				}
 			}
+
 			targetType.Fields = append(targetType.Fields, analyze.FieldInfo{
 				Name:     targetName,
 				Exported: true,
@@ -1281,6 +1299,7 @@ func (r *Resolver) remapToGeneratedType(srcType *analyze.TypeInfo) *analyze.Type
 				IsGenerated: true,
 			}
 		}
+
 		return srcType
 	}
 
@@ -1294,6 +1313,7 @@ func (r *Resolver) remapToGeneratedType(srcType *analyze.TypeInfo) *analyze.Type
 				IsGenerated: true,
 			}
 		}
+
 		return srcType
 	}
 
@@ -1307,6 +1327,7 @@ func (r *Resolver) remapToGeneratedType(srcType *analyze.TypeInfo) *analyze.Type
 				IsGenerated: true,
 			}
 		}
+
 		return srcType
 	}
 

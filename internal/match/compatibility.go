@@ -20,19 +20,27 @@ const (
 	TypeIdentical
 )
 
+const (
+	VerdictIdentical      = "identical"
+	VerdictAssignable     = "assignable"
+	VerdictConvertible    = "convertible"
+	VerdictNeedsTransform = "needs_transform"
+	VerdictIncompatible   = "incompatible"
+)
+
 // String returns a human-readable name for the compatibility level.
 func (c TypeCompatibility) String() string {
 	switch c {
 	case TypeIdentical:
-		return "identical"
+		return VerdictIdentical
 	case TypeAssignable:
-		return "assignable"
+		return VerdictAssignable
 	case TypeConvertible:
-		return "convertible"
+		return VerdictConvertible
 	case TypeNeedsTransform:
-		return "needs_transform"
+		return VerdictNeedsTransform
 	case TypeIncompatible:
-		return "incompatible"
+		return VerdictIncompatible
 	default:
 		return "unknown"
 	}

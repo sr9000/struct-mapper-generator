@@ -108,17 +108,25 @@ stage_start "Verify Generated Struct" "Check generated target type has correct f
 
 verify_ok=true
 
-# Check for Target struct
-if grep -q "type Target struct" "$out_dir"/*.go 2>/dev/null; then
-  info "✓ Target struct generated"
+# Check for missing_types.go
+if [[ -f "${here}/missing_types.go" ]]; then
+  info "✓ missing_types.go generated in package root"
 else
-  warn "✗ Target struct not found"
+  warn "✗ missing_types.go not found in package root"
+  verify_ok=false
+fi
+
+# Check for Target struct in missing_types.go
+if [[ -f "${here}/missing_types.go" ]] && grep -q "type Target struct" "${here}/missing_types.go"; then
+  info "✓ Target struct generated in missing_types.go"
+else
+  warn "✗ Target struct not found in missing_types.go"
   verify_ok=false
 fi
 
 # Check for expected fields in Target
 for field in "ID" "Name" "Description" "Items"; do
-  if grep -E "^\s+${field}\s+" "$out_dir"/*.go 2>/dev/null | head -1; then
+  if [[ -f "${here}/missing_types.go" ]] && grep -E "^\s+${field}\s+" "${here}/missing_types.go" | head -1; then
     info "✓ Field ${field} found in generated struct"
   else
     warn "✗ Field ${field} not found"
@@ -127,10 +135,10 @@ for field in "ID" "Name" "Description" "Items"; do
 done
 
 # Check for TargetItem struct
-if grep -q "type TargetItem struct" "$out_dir"/*.go 2>/dev/null; then
+if [[ -f "${here}/missing_types.go" ]] && grep -q "type TargetItem struct" "${here}/missing_types.go"; then
   info "✓ TargetItem struct generated"
 else
-  warn "✗ TargetItem struct not found"
+  warn "✗ TargetItem struct not found in missing_types.go"
   verify_ok=false
 fi
 

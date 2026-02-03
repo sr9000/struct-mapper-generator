@@ -111,7 +111,7 @@ func (s MappingSource) String() string {
 type ConversionStrategy int
 
 const (
-	// StrategyDirectAssign - direct assignment (types are identical or assignable).
+	// StrategyDirectAssign - direct assignment (types are VerdictIdentical or VerdictAssignable).
 	StrategyDirectAssign ConversionStrategy = iota
 	// StrategyConvert - explicit Go type conversion.
 	StrategyConvert

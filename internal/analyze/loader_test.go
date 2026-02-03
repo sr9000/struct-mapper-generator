@@ -1,6 +1,8 @@
 package analyze
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -177,4 +179,23 @@ func TestFieldInfo_JSONName(t *testing.T) {
 	// Test with "-" (ignored in JSON)
 	f4 := FieldInfo{Name: "MyField", Tag: `json:"-"`}
 	assert.Equal(t, "MyField", f4.JSONName())
+}
+
+func TestPackageInfo_Dir(t *testing.T) {
+	// We need to load a real package from the file system.
+	// We can use "caster-generator/internal/analyze" itself.
+	analyzer := NewAnalyzer()
+	graph, err := analyzer.LoadPackages("caster-generator/internal/analyze")
+	require.NoError(t, err)
+
+	pkgInfo := graph.Packages["caster-generator/internal/analyze"]
+	require.NotNil(t, pkgInfo)
+
+	assert.NotEmpty(t, pkgInfo.Dir)
+	assert.True(t, filepath.IsAbs(pkgInfo.Dir), "Dir should be absolute")
+
+	// Check if directory exists
+	info, err := os.Stat(pkgInfo.Dir)
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
 }

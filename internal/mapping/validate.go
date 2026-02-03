@@ -58,7 +58,9 @@ func Validate(mf *MappingFile, graph *analyze.TypeGraph) *diagnostic.Diagnostics
 				// Skip field validation against target for generated types
 				continue
 			}
+
 			res.AddError("target_type_not_found", fmt.Sprintf("target type %q not found", tm.Target), tpStr, tm.Target)
+
 			continue
 		}
 

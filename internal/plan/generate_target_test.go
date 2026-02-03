@@ -121,6 +121,7 @@ mappings:
 	require.NotNil(t, itemsField)
 	require.NotNil(t, itemsField.Type)
 	assert.Equal(t, analyze.TypeKindSlice, itemsField.Type.Kind)
+
 	if itemsField.Type.ElemType != nil {
 		// The element should reference test/target.Item, not test/source.Item
 		assert.Equal(t, "Item", itemsField.Type.ElemType.ID.Name)
@@ -140,5 +141,6 @@ func findField(fields []analyze.FieldInfo, name string) *analyze.FieldInfo {
 			return &fields[i]
 		}
 	}
+
 	return nil
 }

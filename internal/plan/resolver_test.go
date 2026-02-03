@@ -111,7 +111,7 @@ func TestResolverAutoMatch(t *testing.T) {
 	}
 	graph.Types[targetType.ID] = targetType
 
-	// Minimal mapping - let auto-match handle identical names
+	// Minimal mapping - let auto-match handle VerdictIdentical names
 	mf := &mapping.MappingFile{
 		Version: "1",
 		TypeMappings: []mapping.TypeMapping{
@@ -141,7 +141,7 @@ func TestResolverAutoMatch(t *testing.T) {
 		}
 	}
 
-	// ID and Name should be auto-matched (identical names)
+	// ID and Name should be auto-matched (VerdictIdentical names)
 	if autoMatched < 2 {
 		t.Errorf("Expected at least 2 auto-matched fields, got %d", autoMatched)
 	}

@@ -24,4 +24,4 @@ jobs:
       run: go test -v ./...
 
     - name: Run shell examples
-      run: examples/runall.sh
+      run: cd examples && ./runall.sh

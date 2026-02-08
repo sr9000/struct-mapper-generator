@@ -291,8 +291,8 @@ type FieldInfo struct {
 
 ```go
 type TypeGraph struct {
-  Types    map[TypeID]*TypeInfo
-  Packages map[string]*PackageInfo
+  Types    map[TypeID]*TypeInfo    // Keyed by TypeID
+  Packages map[string]*PackageInfo // Keyed by PkgPath
 }
 ```
 
@@ -306,6 +306,7 @@ type TypeGraph struct {
 type PackageInfo struct {
   Path  string
   Name  string
+  Dir   string
   Types []TypeID
 }
 ```
@@ -393,9 +394,9 @@ transforms.
 
 ```go
 type MappingFile struct {
-  Version      string
-  TypeMappings []TypeMapping
-  Transforms   []TransformDef
+  Version      string        `yaml:"version,omitempty"`
+  TypeMappings []TypeMapping `yaml:"mappings"`
+  Transforms   []TransformDef `yaml:"transforms,omitempty"`
 }
 ```
 
@@ -405,13 +406,14 @@ type MappingFile struct {
 
 ```go
 type TypeMapping struct {
-  Source   string      // Source type identifier
-  Target   string      // Target type identifier
-  Requires ArgDefArray // Extra function arguments
-  OneToOne map[string]string // 121 shorthand mappings
-  Fields   []FieldMapping      // Explicit field mappings
-  Ignore   []string            // Fields to ignore
-  Auto     []FieldMapping      // Auto-matched fields with overrides
+  Source         string            // Source type name/ID
+  Target         string            // Target type name/ID
+  Requires       ArgDefArray       // Extra function arguments
+  OneToOne       map[string]string // 121 shorthand mappings
+  GenerateTarget bool              // Generate target type if missing
+  Fields         []FieldMapping    // Explicit field mappings
+  Ignore         []string          // Fields to ignore
+  Auto           []FieldMapping    // Auto-matched fields with overrides
 }
 ```
 
@@ -419,11 +421,12 @@ type TypeMapping struct {
 
 ```go
 type FieldMapping struct {
-  Source    FieldRefArray // Source field reference(s)
-  Target    FieldRefArray // Target field reference(s)
-  Default   *string       // Default value if source absent
-  Transform string    // Transform function name
-  Extra     ExtraVals // Extra value references
+  Source     FieldRefArray // Source field reference(s)
+  Target     FieldRefArray // Target field reference(s)
+  TargetType string        // Explicit target type (for GenerateTarget)
+  Default    *string       // Default value if source absent
+  Transform  string        // Transform function name
+  Extra      ExtraVals     // Extra value references
 }
 ```
 
@@ -606,6 +609,25 @@ type ValidatedTransform struct {
 - **Purpose:** Resolve a type identifier string to `TypeInfo`
 - **Accepts:** Name-only, `pkg.Name`, or fully-qualified paths
 
+#### Loader Functions
+
+| Function                                        | Purpose                       |
+|-------------------------------------------------|-------------------------------|
+| `LoadFile(path string) (*MappingFile, error)`   | Load YAML file from path      |
+| `Parse(data []byte) (*MappingFile, error)`      | Parse YAML bytes              |
+| `Marshal(mf *MappingFile) ([]byte, error)`      | Marshal to YAML bytes         |
+| `WriteFile(mf *MappingFile, path string) error` | Write YAML file               |
+| `NormalizeTypeMapping(tm *TypeMapping)`         | Normalize a type mapping      |
+| `NormalizeMappingFile(mf *MappingFile)`         | Normalize entire mapping file |
+
+#### Path Parsing
+
+| Function                                                      | Purpose                  |
+|---------------------------------------------------------------|--------------------------|
+| `ParsePath(path string) (FieldPath, error)`                   | Parse single path string |
+| `ParsePaths(paths StringOrArray) ([]FieldPath, error)`        | Parse multiple paths     |
+| `ParsePathsFromRefs(refs FieldRefArray) ([]FieldPath, error)` | Parse paths from refs    |
+
 #### External Dependencies
 
 - `errors`, `fmt`, `strings` (stdlib)
@@ -678,6 +700,7 @@ type TypeCompatibilityResult struct {
 |--------------------------------------------------|----------------------------------------------------------------|
 | `NormalizeIdent(s string) string`                | Canonicalize: tokenize CamelCase, lowercase, remove separators |
 | `NormalizeIdentWithSuffixStrip(s string) string` | Normalize + strip common suffixes                              |
+| `TokenizeIdent(s string) []string`               | Tokenize identifier string                                     |
 | `tokenizeCamelCase(s string) []string`           | Split CamelCase preserving acronyms                            |
 | `stripSeparators(s string) string`               | Remove `_`, `-`, space                                         |
 
@@ -734,6 +757,7 @@ type Candidate struct {
 
 **Purpose:** Resolution pipeline that converts YAML mappings and automatic matches into a deterministic, typed
 `ResolvedMappingPlan` used for code generation. Handles nested conversions, ordering dependencies, and diagnostics.
+Includes virtual type creation and suggestion exporting.
 
 #### Core Types
 
@@ -741,8 +765,10 @@ type Candidate struct {
 
 ```go
 type ResolvedMappingPlan struct {
-  TypePairs   []ResolvedTypePair
-  Diagnostics diagnostic.Diagnostics
+  TypePairs          []ResolvedTypePair
+  TypeGraph          *analyze.TypeGraph
+  Diagnostics        diagnostic.Diagnostics
+  OriginalTransforms []mapping.TransformDef
 }
 ```
 
@@ -755,12 +781,13 @@ type ResolvedMappingPlan struct {
 
 ```go
 type ResolvedTypePair struct {
-  SourceType      *analyze.TypeInfo
-  TargetType      *analyze.TypeInfo
-  Mappings        []ResolvedFieldMapping
-  UnmappedTargets []UnmappedField
-  NestedPairs     []NestedConversion
-  Requires        []mapping.ArgDef
+  SourceType        *analyze.TypeInfo
+  TargetType        *analyze.TypeInfo
+  Mappings          []ResolvedFieldMapping
+  UnmappedTargets   []UnmappedField
+  NestedPairs       []NestedConversion
+  Requires          []mapping.ArgDef
+  IsGeneratedTarget bool
 }
 ```
 
@@ -860,41 +887,102 @@ type IncompleteMappingInfo struct {
 }
 ```
 
-##### `ArgDef`
+##### `DeducedType` and `pairUsage`
 
-```go
-type ArgDef struct {
-  Name string
-  Type string
-}
-```
+Types to support `deduce_requires` logic for dependency analysis across transforms.
+
+#### Suggestions Model
+
+Types for suggestion reporting and export:
+
+- `SuggestionReport`
+- `TypePairReport`
+- `MatchReport`
+- `UnmappedReport`
+- `CandidateReport`
+- `ExportConfig`
 
 #### Resolver Functions
 
-| Function                                                                                      | Purpose                                           |
-|-----------------------------------------------------------------------------------------------|---------------------------------------------------|
-| `resolve121Mapping(...)`                                                                      | Resolve YAML 1:1 shorthand mapping                |
-| `resolveFieldMapping(fm *mapping.FieldMapping, ...)`                                          | Resolve explicit YAML field mapping               |
-| `determineStrategy(...)`                                                                      | Pick `ConversionStrategy` for source/target paths |
-| `determineStrategyWithHint(...)`                                                              | Strategy selection with introspection hint        |
-| `resolveFieldType(path mapping.FieldPath, typeInfo *analyze.TypeInfo) *TypeInfo`              | Walk path to get field's `TypeInfo`               |
-| `autoMatchRemainingFields(...)`                                                               | Auto-match unmapped target fields                 |
-| `determineStrategyFromCandidate(cand *match.Candidate) (ConversionStrategy, string)`          | Map candidate compatibility to strategy           |
-| `populateExtraTargetDependencies(pair *ResolvedTypePair, diags *diagnostic.Diagnostics)`      | Build `DependsOnTargets` from `Extra` references  |
-| `detectNestedConversions(result *ResolvedTypePair, diags *diagnostic.Diagnostics, depth int)` | Scan for nested type conversions                  |
-| `sortMappings(result *ResolvedTypePair)`                                                      | Deterministic ordering for outputs                |
-| `collectionElem(t *analyze.TypeInfo) *analyze.TypeInfo`                                       | Get element type for slice/array                  |
+| Function                                        | Purpose                                           |
+|-------------------------------------------------|---------------------------------------------------|
+| `DefaultConfig() ResolutionConfig`              | Returns default resolution configuration          |
+| `NewResolver(...)`                              | Create new resolver instance                      |
+| `Resolve() (*ResolvedMappingPlan, error)`       | Main entry point for resolution                   |
+| `resolveTypePairRecursive(...)`                 | Recursively resolve type pairs                    |
+| `resolveTypeMapping(...)`                       | Resolve a single type mapping                     |
+| `resolve121Mapping(...)`                        | Resolve YAML 1:1 shorthand mapping                |
+| `resolveFieldMapping(...)`                      | Resolve explicit YAML field mapping               |
+| `determineStrategy(...)`                        | Pick `ConversionStrategy` for source/target paths |
+| `determineStrategyWithHint(...)`                | Strategy selection with introspection hint        |
+| `determineStrategyByKind(...)`                  | Low-level strategy selection based on types       |
+| `resolveFieldType(...)`                         | Walk path to get field's `TypeInfo`               |
+| `autoMatchRemainingFields(...)`                 | Auto-match unmapped target fields                 |
+| `determineStrategyFromCandidate(...)`           | Map candidate compatibility to strategy           |
+| `populateExtraTargetDependencies(...)`          | Build `DependsOnTargets` from `Extra` references  |
+| `detectNestedConversions(...)`                  | Scan for nested type conversions                  |
+| `analyzeMappingForNestedConversion(...)`        | Analyze mapping for nested conversion needs       |
+| `resolveNestedConversion(...)`                  | Resolve details for nested conversion             |
+| `sortMappings(...)`                             | Deterministic ordering for outputs                |
+| `collectionElem(...)`                           | Get element type for slice/array                  |
+| `deduceRequiresTypes(...)`                      | Infer types for `Requires` arguments              |
+| `DefaultExportConfig() ExportConfig`            | Returns default export configuration              |
+| `ExportSuggestions(...)`                        | Generate YAML with suggestion                     |
+| `ExportSuggestionsYAML(...)`                    | Render suggestions to YAML bytes                  |
+| `ExportSuggestionsYAMLWithConfig(...)`          | Render suggestions to YAML with config options    |
+| `GenerateReport(...)`                           | Detailed suggestion report                        |
+| `FormatReport(report *SuggestionReport) string` | Format report as human-readable string            |
+
+#### Virtual Types
+
+The resolver can generate "virtual" target types for simple compositions (tuples, inline structs) to bridge structural gaps.
+
+| Function                       | Purpose                                                      |
+|--------------------------------|--------------------------------------------------------------|
+| `preCreateVirtualTypes()`      | Initialize virtual type registry                             |
+| `createVirtualTargetType(...)` | Create a virtual struct that helps map N sources to 1 target |
+| `remapToGeneratedType(...)`    | Resolve virtual types back to generated real types if needed |
 
 #### Resolver Configuration
 
-The `Resolver` holds configuration for auto-matching thresholds:
+##### `ResolutionConfig`
 
+```go
+type ResolutionConfig struct {
+  MinConfidence      float64
+  MinGap             float64
+  AmbiguityThreshold float64
+  StrictMode         bool
+  MaxCandidates      int
+  RecursiveResolve   bool
+  MaxRecursionDepth  int
+}
+```
+
+- **Constructor:** `DefaultConfig() ResolutionConfig`
+
+Configuration fields:
 - `MinConfidence` — minimum score for auto-accept
 - `MinGap` — minimum gap between top candidates
 - `AmbiguityThreshold` — threshold for ambiguity detection
+- `StrictMode` — fails on any unresolved target fields
 - `MaxCandidates` — max candidates to report
 - `MaxRecursionDepth` — depth limit for nested resolution
 - `RecursiveResolve` — enable/disable recursive nested resolution
+
+##### `Resolver`
+
+```go
+type Resolver struct {
+  graph         *analyze.TypeGraph
+  mappingDef    *mapping.MappingFile
+  registry      *mapping.TransformRegistry
+  config        ResolutionConfig
+  resolvedPairs map[string]*ResolvedTypePair
+}
+```
+
+- **Constructor:** `NewResolver(graph, mappingDef, config) *Resolver`
 
 #### External Dependencies
 
@@ -929,7 +1017,11 @@ type GeneratorConfig struct {
 
 ```go
 type Generator struct {
-  config GeneratorConfig
+  config            GeneratorConfig
+  graph             *analyze.TypeGraph
+  missingTransforms map[string]MissingTransformInfo
+  missingTypes      map[string][]MissingTypeInfo
+  contextPkgPath    string
 }
 ```
 
@@ -944,6 +1036,14 @@ type GeneratedFile struct {
   Content  []byte
 }
 ```
+
+##### `MissingTransformInfo`, `MissingTypeInfo`
+
+Structured data for reporting elements that need to be generated but are missing.
+
+##### `MissingTypesTemplateData`
+
+Data passed to templates for generating missing type definitions.
 
 #### Template Data Types
 
@@ -1040,11 +1140,14 @@ type extraArg struct {
 | Function                                                                          | Purpose                                              |
 |-----------------------------------------------------------------------------------|------------------------------------------------------|
 | `generateTypePair(pair *plan.ResolvedTypePair) (*GeneratedFile, error)`           | Build template data, execute template, format output |
+| `generateMissingTransformsFile()`                                                 | Generate stubs for missing transforms                |
+| `generateMissingTypesFiles()`                                                     | Generate definitions for missing types               |
 | `buildTemplateData(pair *plan.ResolvedTypePair) *templateData`                    | Convert `ResolvedTypePair` to template data          |
 | `orderAssignmentsByDependencies(data *templateData, pair *plan.ResolvedTypePair)` | Topologically sort assignments                       |
 | `collectNestedCasters(...)`                                                       | Convert `NestedPairs` to `nestedCasterRef` entries   |
 | `buildAssignment(m *plan.ResolvedFieldMapping, ...) *assignmentData`              | Create `assignmentData` from resolved mapping        |
 | `applyConversionStrategy(...)`                                                    | Dispatch to strategy-specific handling               |
+| `filename(pair)`, `functionName(pair)`                                            | Helpers for naming artifacts                         |
 
 #### Strategy Helpers
 
@@ -1067,16 +1170,17 @@ type extraArg struct {
 
 #### Collection Mapping (Slices, Arrays, Maps)
 
-| Function                                                     | Purpose                                                         |
-|--------------------------------------------------------------|-----------------------------------------------------------------|
-| `buildSliceMapping(...)`                                     | Orchestrate slice/array mapping code                            |
-| `buildMapMapping(...)`                                       | Orchestrate map mapping code                                    |
+| Function                                                                       | Purpose                                                    |
+|--------------------------------------------------------------------------------|------------------------------------------------------------|
+| `buildSliceMapping(...)`                                                       | Orchestrate slice/array mapping code                       |
+| `buildMapMapping(...)`                                                         | Orchestrate map mapping code                               |
 | `generateCollectionLoop(srcField, tgtField, srcType, tgtType, imports, depth)` | Unified recursive loop generation for all collection types |
-| `isCollection(t *analyze.TypeInfo) bool`                     | Check if type is a slice, array, or map                         |
-| `getSliceElementType(t *analyze.TypeInfo) *analyze.TypeInfo` | Get element type for slice/array                                |
-| `getMapKeyType(t *analyze.TypeInfo) *analyze.TypeInfo`       | Get key type for map                                            |
-| `getMapValueType(t *analyze.TypeInfo) *analyze.TypeInfo`     | Get value type for map                                          |
-| `buildValueConversion(srcExpr, srcType, tgtType, tgtTypeStr) string` | Per-element/value conversion logic                      |
+| `generateSliceArrayLoop(...)`, `generateMapLoop(...)`                          | Specific loop generators                                   |
+| `isCollection(t *analyze.TypeInfo) bool`                                       | Check if type is a slice, array, or map                    |
+| `getSliceElementType(t *analyze.TypeInfo) *analyze.TypeInfo`                   | Get element type for slice/array                           |
+| `getMapKeyType(t *analyze.TypeInfo) *analyze.TypeInfo`                         | Get key type for map                                       |
+| `getMapValueType(t *analyze.TypeInfo) *analyze.TypeInfo`                       | Get value type for map                                     |
+| `buildValueConversion(srcExpr, srcType, tgtType, tgtTypeStr) string`           | Per-element/value conversion logic                         |
 
 **`generateCollectionLoop` Details:**
 - **Recursion:** If elements are also collections (e.g., `[][]T` or `map[K][]V`), recursively generates nested loops
@@ -1093,6 +1197,8 @@ type extraArg struct {
 | `findFieldInStruct(structType, fieldName) *analyze.TypeInfo` | Find field in struct by name        |
 | `getFieldTypeString(typeInfo, fieldPath, imports) string`    | String representation of field type |
 | `typeRefString(t *analyze.TypeInfo, imports) string`         | Go type string for `TypeInfo`       |
+| `getPkgName(pkgPath string) string`                          | Get short package name              |
+| `addImport(imports, pkgPath)`                                | Manage import aliases               |
 
 #### Zero Value Helpers
 

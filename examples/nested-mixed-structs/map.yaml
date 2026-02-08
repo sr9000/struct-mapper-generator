@@ -1,20 +1,19 @@
-version: 1
-
-types:
-  - from: caster-generator/examples/nested-mixed-structs.APIOrder
-    to: caster-generator/examples/nested-mixed-structs.DomainOrder
+version: "1"
+mappings:
+  - source: caster-generator/examples/nested-mixed-structs.APIOrder
+    target: caster-generator/examples/nested-mixed-structs.DomainOrder
     fields:
-      - target: ID
-        source: ID
-      - target: Lines
-        source: Items
+      - source: ID
+        target: ID
+      - source: Items
+        target: Lines
         hint: dive
-  - from: caster-generator/examples/nested-mixed-structs.APIItem
-    to: caster-generator/examples/nested-mixed-structs.DomainLine
+  - source: caster-generator/examples/nested-mixed-structs.APIItem
+    target: caster-generator/examples/nested-mixed-structs.DomainLine
     fields:
-      - target: SKU
-        source: SKU
-      - target: Qty
-        source: Quantity
-      - target: NoteText
-        source: Note
+      - source: SKU
+        target: SKU
+      - source: Quantity
+        target: Qty
+      - source: Note
+        target: NoteText

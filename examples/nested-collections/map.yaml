@@ -2,3 +2,5 @@ version: "1"
 mappings:
   - source: caster-generator/examples/nested-collections.Source
     target: caster-generator/examples/nested-collections.Target
+  - source: caster-generator/examples/nested-collections.SourceInner
+    target: caster-generator/examples/nested-collections.TargetInner

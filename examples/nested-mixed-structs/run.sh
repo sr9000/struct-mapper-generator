@@ -52,10 +52,10 @@ stage_start "Patch YAML" "Add dive hint for Items -> Lines slice mapping"
 cat > "${stages_dir}/stage2.yaml" << 'EOF'
 version: "1"
 
-# Using 'types' format which the generator supports well for this example
-types:
-  - from: caster-generator/examples/nested-mixed-structs.APIOrder
-    to: caster-generator/examples/nested-mixed-structs.DomainOrder
+# Using 'mappings' format
+mappings:
+  - source: caster-generator/examples/nested-mixed-structs.APIOrder
+    target: caster-generator/examples/nested-mixed-structs.DomainOrder
     fields:
       - source: ID
         target: ID
@@ -63,8 +63,8 @@ types:
         target: Lines
         hint: dive  # Enable element-wise conversion for []*APIItem -> []*DomainLine
 
-  - from: caster-generator/examples/nested-mixed-structs.APIItem
-    to: caster-generator/examples/nested-mixed-structs.DomainLine
+  - source: caster-generator/examples/nested-mixed-structs.APIItem
+    target: caster-generator/examples/nested-mixed-structs.DomainLine
     fields:
       - source: SKU
         target: SKU

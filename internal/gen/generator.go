@@ -1024,8 +1024,11 @@ func (g *Generator) generateCollectionLoop(
 		srcVal := g.getMapValueType(srcType)
 		tgtVal := g.getMapValueType(tgtType)
 
-		if srcVal == nil || tgtVal == nil {
-			return "// TODO: unknown map value types"
+		srcKey := g.getMapKeyType(srcType)
+		tgtKey := g.getMapKeyType(tgtType)
+
+		if srcVal == nil || tgtVal == nil || srcKey == nil || tgtKey == nil {
+			return "// TODO: unknown map types"
 		}
 
 		// Initialization
@@ -1034,7 +1037,10 @@ func (g *Generator) generateCollectionLoop(
 
 		loopHeader := fmt.Sprintf("for %s, %s := range %s {", keyVar, valVar, srcField)
 
-		tgtItem := fmt.Sprintf("%s[%s]", tgtField, keyVar)
+		tgtKeyStr := g.typeRefString(tgtKey, imports)
+		keyExpr := g.buildValueConversion(keyVar, srcKey, tgtKey, tgtKeyStr)
+
+		tgtItem := fmt.Sprintf("%s[%s]", tgtField, keyExpr)
 
 		body := ""
 		if g.isCollection(srcVal) && g.isCollection(tgtVal) {
@@ -1540,6 +1546,14 @@ func (g *Generator) typesConvertible(a, b *analyze.TypeInfo) bool {
 	// Same named types
 	if a.ID == b.ID && a.ID.Name != "" {
 		return true
+	}
+
+	// Handle Aliases: if underlying types are convertible, then aliases are convertible
+	if a.Kind == analyze.TypeKindAlias {
+		return g.typesConvertible(a.Underlying, b)
+	}
+	if b.Kind == analyze.TypeKindAlias {
+		return g.typesConvertible(a, b.Underlying)
 	}
 
 	return false

@@ -2,3 +2,5 @@ version: "1"
 mappings:
   - source: caster-generator/examples/maps.Source
     target: caster-generator/examples/maps.Target
+  - source: caster-generator/examples/maps.Params
+    target: caster-generator/examples/maps.Info

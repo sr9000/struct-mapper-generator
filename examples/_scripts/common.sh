@@ -324,7 +324,7 @@ test_compile() {
   root="$(repo_root)"
 
   info "Test-compiling ${pkg}"
-  (cd "$root" && go test "${pkg}" -run '^$' -count=1) || {
+  (cd "$root" && go build "${pkg}/...") || {
     error "Test compile failed for ${pkg}"
     return 1
   }

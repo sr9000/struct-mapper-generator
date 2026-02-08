@@ -952,11 +952,12 @@ func (g *Generator) wrapConversion(
 	return fmt.Sprintf("%s(%s)", typeStr, expr)
 }
 
-// buildSliceMapping generates the slice mapping code.
-func (g *Generator) buildSliceMapping(
+// buildCollectionMapping is a helper for slice and map mappings.
+func (g *Generator) buildCollectionMapping(
 	m *plan.ResolvedFieldMapping,
 	pair *plan.ResolvedTypePair,
 	imports map[string]importSpec,
+	mappingKind string,
 ) string {
 	if len(m.SourcePaths) == 0 || len(m.TargetPaths) == 0 {
 		return ""
@@ -969,14 +970,23 @@ func (g *Generator) buildSliceMapping(
 	tgtType := g.getFieldTypeInfo(pair.TargetType, m.TargetPaths[0].String())
 
 	if srcType == nil || tgtType == nil {
-		return fmt.Sprintf("// TODO: could not determine types for slice mapping %s -> %s",
-			m.SourcePaths[0], m.TargetPaths[0])
+		return fmt.Sprintf("// TODO: could not determine types for %s mapping %s -> %s",
+			mappingKind, m.SourcePaths[0], m.TargetPaths[0])
 	}
 
 	// Build extra args string from m.Extra
 	extraArgs := g.buildExtraArgsForNestedCall(m.Extra)
 
 	return g.generateCollectionLoop(srcField, tgtField, srcType, tgtType, imports, 0, extraArgs)
+}
+
+// buildSliceMapping generates the slice mapping code.
+func (g *Generator) buildSliceMapping(
+	m *plan.ResolvedFieldMapping,
+	pair *plan.ResolvedTypePair,
+	imports map[string]importSpec,
+) string {
+	return g.buildCollectionMapping(m, pair, imports, "slice")
 }
 
 // buildExtraArgsForNestedCall builds the extra arguments string for a nested caster call.
@@ -1264,25 +1274,7 @@ func (g *Generator) buildMapMapping(
 	pair *plan.ResolvedTypePair,
 	imports map[string]importSpec,
 ) string {
-	if len(m.SourcePaths) == 0 || len(m.TargetPaths) == 0 {
-		return ""
-	}
-
-	srcField := "in." + m.SourcePaths[0].String()
-	tgtField := "out." + m.TargetPaths[0].String()
-
-	srcType := g.getFieldTypeInfo(pair.SourceType, m.SourcePaths[0].String())
-	tgtType := g.getFieldTypeInfo(pair.TargetType, m.TargetPaths[0].String())
-
-	if srcType == nil || tgtType == nil {
-		return fmt.Sprintf("// TODO: could not determine types for map mapping %s -> %s",
-			m.SourcePaths[0], m.TargetPaths[0])
-	}
-
-	// Build extra args string from m.Extra
-	extraArgs := g.buildExtraArgsForNestedCall(m.Extra)
-
-	return g.generateCollectionLoop(srcField, tgtField, srcType, tgtType, imports, 0, extraArgs)
+	return g.buildCollectionMapping(m, pair, imports, "map")
 }
 
 func (g *Generator) getMapKeyType(t *analyze.TypeInfo) *analyze.TypeInfo {

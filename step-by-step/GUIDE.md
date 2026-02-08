@@ -31,26 +31,26 @@ cd step-by-step
 
 ## 🎯 Learning Path
 
-| Step | Topic | Description |
-|------|-------|-------------|
-| 1 | Analyze | Explore packages and discover struct types |
-| 2 | Suggest | Generate your first mapping suggestion |
-| 3 | Generate | Create caster code from a mapping |
-| 4 | 121 Mappings | Simple field renames with `121` shorthand |
-| 5 | Fields Section | Explicit field mappings with full control |
-| 6 | Ignore & Auto | Skip fields and understand auto-matching |
-| 7 | Transforms Basics | Handle type mismatches with transform functions |
-| 8 | Multi-Source Transforms | Combine multiple fields into one (N:1) |
-| 9 | Transform Stubs | Auto-generate transform function stubs |
-| 10 | Nested Structs | Map complex nested types with dive hints |
-| 11 | Collections | Slices, arrays, and maps |
-| 12 | Pointers & Deep Paths | Pointer handling and deep field access |
-| 13 | Recursive Types | Self-referential struct mapping |
-| 14 | Context Passing | `requires` and `extra` for parent-child data |
-| 15 | Virtual Types | Generate target types on-the-fly |
-| 16 | Cross-Package Virtual | Generate types in different packages |
-| 17 | Check Command | Validate mappings for CI/CD |
-| 18 | Full Workflow | Complete real-world scenario |
+| Step | Topic                   | Description                                     |
+|------|-------------------------|-------------------------------------------------|
+| 1    | Analyze                 | Explore packages and discover struct types      |
+| 2    | Suggest                 | Generate your first mapping suggestion          |
+| 3    | Generate                | Create caster code from a mapping               |
+| 4    | 121 Mappings            | Simple field renames with `121` shorthand       |
+| 5    | Fields Section          | Explicit field mappings with full control       |
+| 6    | Ignore & Auto           | Skip fields and understand auto-matching        |
+| 7    | Transforms Basics       | Handle type mismatches with transform functions |
+| 8    | Multi-Source Transforms | Combine multiple fields into one (N:1)          |
+| 9    | Transform Stubs         | Auto-generate transform function stubs          |
+| 10   | Nested Structs          | Map complex nested types with dive hints        |
+| 11   | Collections             | Slices, arrays, and maps                        |
+| 12   | Pointers & Deep Paths   | Pointer handling and deep field access          |
+| 13   | Recursive Types         | Self-referential struct mapping                 |
+| 14   | Context Passing         | `requires` and `extra` for parent-child data    |
+| 15   | Virtual Types           | Generate target types on-the-fly                |
+| 16   | Cross-Package Virtual   | Generate types in different packages            |
+| 17   | Check Command           | Validate mappings for CI/CD                     |
+| 18   | Full Workflow           | Complete real-world scenario                    |
 
 ---
 
@@ -187,12 +187,12 @@ func StoreProductToWarehouseProduct(in store.Product) warehouse.Product {
 
 ### Options
 
-| Flag | Description |
-|------|-------------|
-| `-out <dir>` | Output directory (default: `./generated`) |
-| `-package <name>` | Package name (default: `casters`) |
-| `-strict` | Fail if any target field is unmapped |
-| `-write-suggestions <file>` | Write suggested mappings for review |
+| Flag                        | Description                               |
+|-----------------------------|-------------------------------------------|
+| `-out <dir>`                | Output directory (default: `./generated`) |
+| `-package <name>`           | Package name (default: `casters`)         |
+| `-strict`                   | Fail if any target field is unmapped      |
+| `-write-suggestions <file>` | Write suggested mappings for review       |
 
 ### Run the Example
 
@@ -225,12 +225,14 @@ mappings:
 
 ### When to Use `121`
 
-✅ Same types, just different names
-✅ Exact type matches (string→string, int→int)
-✅ Quick, readable mappings
+- ✅ Same types, just different names
+- ✅ Exact type matches (string→string, int→int)
+- ✅ Quick, readable mappings
 
-❌ Type conversions (use `fields` with `transform`)
-❌ Complex logic (use `fields`)
+### When NOT to Use `121`
+
+- ❌ Type conversions (use `fields` with `transform`)
+- ❌ Complex logic (use `fields`)
 
 ### Run the Example
 
@@ -369,6 +371,27 @@ func ParseDate(s string) time.Time {
     return t
 }
 ```
+
+### Auto-Generating Missing Transforms
+
+If you map incompatible types (like `string` to `uint`) without providing a transform, the `suggest` command can auto-generate placeholder functions for you.
+
+1. **Suggest identifies the mismatch** and adds a `TODO_` transform to your mapping:
+   ```yaml
+   fields:
+     - source: ProductID
+       target: ID
+       transform: TODO_ProductIDToID
+   ```
+
+2. **Gen creates the stub** in `missing_transforms.go`:
+   ```go
+   func TODO_ProductIDToID(v0 string) uint {
+       panic("transform TODO_ProductIDToID not implemented")
+   }
+   ```
+
+This gives you a clear compilation target: simply replace the panic with your conversion logic.
 
 ### Run the Example
 

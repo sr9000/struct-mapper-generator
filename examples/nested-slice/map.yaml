@@ -1,0 +1,11 @@
+version: "1"
+mappings:
+  - source: caster-generator/examples/nested-slice.Source
+    target: caster-generator/examples/nested-slice.Target
+  - source: caster-generator/examples/nested-slice.Point
+    target: caster-generator/examples/nested-slice.Pair
+    fields:
+      - source: X
+        target: First
+      - source: Y
+        target: Second

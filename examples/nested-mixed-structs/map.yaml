@@ -1,0 +1,19 @@
+version: "1"
+mappings:
+  - source: caster-generator/examples/nested-mixed-structs.APIOrder
+    target: caster-generator/examples/nested-mixed-structs.DomainOrder
+    fields:
+      - source: ID
+        target: ID
+      - source: Items
+        target: Lines
+        hint: dive
+  - source: caster-generator/examples/nested-mixed-structs.APIItem
+    target: caster-generator/examples/nested-mixed-structs.DomainLine
+    fields:
+      - source: SKU
+        target: SKU
+      - source: Quantity
+        target: Qty
+      - source: Note
+        target: NoteText

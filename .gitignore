@@ -27,3 +27,8 @@ go.work.sum
 .idea/
 
 *.pdf
+
+/examples/**/transforms.go
+/examples/**/missing_types.go
+/examples/**/generated/
+/examples/**/stages/

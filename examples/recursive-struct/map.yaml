@@ -1,0 +1,9 @@
+version: "1"
+mappings:
+  - source: caster-generator/examples/recursive-struct.Node
+    target: caster-generator/examples/recursive-struct.NodeDTO
+    fields:
+      - source: Value
+        target: Value
+      - source: Next
+        target: Next

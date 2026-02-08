@@ -1,0 +1,34 @@
+name: Test
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
+    - name: Build
+      run: go build -v ./...
+
+    - name: Run unit tests
+      run: go test -v ./...
+
+    - name: Run shell examples
+      run: |
+        export CG_NO_PROMPT=1
+        for script in examples/*/run.sh; do
+          if [ -f "$script" ]; then
+             echo "Running $script"
+             bash "$script"
+          fi
+        done

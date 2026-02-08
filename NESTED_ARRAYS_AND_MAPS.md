@@ -44,7 +44,7 @@ New examples will act as integration tests.
 
 We will create the following structures in `examples/`:
 
-### 1. Nested Arrays (`examples/nested`)
+### 1. Nested Arrays (`examples/nested-slice`)
 **Source:**
 ```go
 type Source struct {
@@ -72,7 +72,7 @@ type Target struct {
 }
 ```
 
-### 3. Deep Nesting (`examples/nested-mixed`)
+### 3. Deep Nesting (`examples/nested-collections`)
 **Source:**
 ```go
 type Source struct {
@@ -84,9 +84,10 @@ type Inner struct { Name string }
 ## Step-by-Step Implementation Plan
 
 - [ ] **Step 1: Create Reproductions**
-    - Create `examples/nested` with failing `run.sh`.
+    - Create `examples/nested-slice` with failing `run.sh`.
+    - Create `examples/nested-map` with failing `run.sh`.
     - Create `examples/maps` with failing `run.sh`.
-    - Create `examples/nested-mixed` with failing `run.sh`.
+    - Create `examples/nested-collections` with failing `run.sh`.
 
 - [ ] **Step 2: Map Support (Level 1)**
     - Modify `internal/gen/generator.go` to recognize `TypeKindMap`.
@@ -118,14 +119,15 @@ For each directory, create:
 4.  `run.sh`: A script to run the generator and verify the output.
 
 ### Definition of Done
-- Directories `examples/nested`, `examples/maps`, `examples/nested-mixed` exist.
+- Directories `examples/nested-slice`, `examples/maps`, `examples/nested-collections` exist.
 - `run.sh` in each directory executes the generator.
 - The generation likely fails or produces incorrect code (this is expected at this stage).
 
 ### Suggested files set to work
-- `examples/nested/*`
+- `examples/nested-slice/*`
+- `examples/nested-map/*`
 - `examples/maps/*`
-- `examples/nested-mixed/*`
+- `examples/nested-collections/*`
 
 ### Ideas what functions/structs needs to be patched/created
 - Copy headers/boilerplate from `examples/basic`.
@@ -177,8 +179,8 @@ Implement recursion in `generateCollectionLoop`.
 When the element type of the collection is itself a Slice or Map, call `generateCollectionLoop` again with `depth + 1`.
 
 ### Definition of Done
-- `examples/nested` (`[][]int`) compiles and runs correctly.
-- `examples/nested-mixed` (`map[string][]Inner`) generates correct nested loops.
+- `examples/nested-slice` (`[][]int`) compiles and runs correctly.
+- `examples/nested-collections` (`map[string][]Inner`) generates correct nested loops.
 
 ### Suggested files set to work
 - `internal/gen/generator.go`
@@ -194,7 +196,7 @@ Ensure that when the recursion hits a leaf node that is a Struct (not a primitiv
 This might require updating `buildElementConversion` to be aware of the context or just function correctly within the loop body.
 
 ### Definition of Done
-- `examples/nested-mixed` fully works including struct conversion.
+- `examples/nested-collections` fully works including struct conversion.
 - `generated/` code shows `Target = Convert(Source)` calls inside loops.
 
 ### Suggested files set to work

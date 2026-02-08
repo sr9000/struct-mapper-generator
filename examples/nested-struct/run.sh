@@ -31,9 +31,9 @@ clean_dir "$out_dir"
 stage_start "Initial Suggest" "Generate base mapping for APIOrder -> DomainOrder"
 
 run_suggest "${stages_dir}/stage1.yaml" \
-  -pkg ./examples/nested \
-  -from "caster-generator/examples/nested.APIOrder" \
-  -to "caster-generator/examples/nested.DomainOrder" \
+  -pkg ./examples/nested-struct \
+  -from "caster-generator/examples/nested-struct.APIOrder" \
+  -to "caster-generator/examples/nested-struct.DomainOrder" \
   -min-confidence 0.5
 
 show_yaml_with_comments "${stages_dir}/stage1.yaml" \
@@ -65,8 +65,8 @@ transforms:
 
 mappings:
   # Root mapping: APIOrder -> DomainOrder
-  - source: caster-generator/examples/nested.APIOrder
-    target: caster-generator/examples/nested.DomainOrder
+  - source: caster-generator/examples/nested-struct.APIOrder
+    target: caster-generator/examples/nested-struct.DomainOrder
     fields:
       # ID string -> OrderID uint needs transform
       - source: ID
@@ -89,8 +89,8 @@ mappings:
       - ShippingAddr
 
   # Customer mapping
-  - source: caster-generator/examples/nested.APICustomer
-    target: caster-generator/examples/nested.DomainCustomer
+  - source: caster-generator/examples/nested-struct.APICustomer
+    target: caster-generator/examples/nested-struct.DomainCustomer
     fields:
       - source: ID
         target: CustomerID
@@ -101,8 +101,8 @@ mappings:
       Phone: PhoneNumber
 
   # Line item mapping with requires (receives OrderID from parent)
-  - source: caster-generator/examples/nested.APIItem
-    target: caster-generator/examples/nested.DomainLineItem
+  - source: caster-generator/examples/nested-struct.APIItem
+    target: caster-generator/examples/nested-struct.DomainLineItem
     requires:
       - name: OrderID
         type: uint
@@ -139,7 +139,7 @@ prompt_continue
 stage_start "Suggest Improve" "Run suggest to validate and fill in remaining mappings"
 
 run_suggest_improve "${stages_dir}/stage2.yaml" "${stages_dir}/stage3.yaml" \
-  -pkg ./examples/nested \
+  -pkg ./examples/nested-struct \
   -min-confidence 0.5
 
 show_yaml_with_comments "${stages_dir}/stage3.yaml" \
@@ -153,7 +153,7 @@ prompt_continue
 stage_start "Generate Transforms" "Create Go file with transform function implementations"
 
 cat > "${here}/transforms.go" << 'EOF'
-package nested
+package nested_struct
 
 import (
 	"strconv"
@@ -188,7 +188,7 @@ stage_start "Generate with Suggestions" "Generate code and capture any needed su
 
 # Use stage2.yaml which has the transforms section
 run_gen_with_suggestions "${stages_dir}/stage2.yaml" "$out_dir" "${stages_dir}/stage5_suggestions.yaml" \
-  -pkg ./examples/nested \
+  -pkg ./examples/nested-struct \
   -package casters
 
 if [[ -f "${stages_dir}/stage5_suggestions.yaml" ]]; then
@@ -210,7 +210,7 @@ stage_start "Final Generate" "Generate final caster code"
 final_mapping="${stages_dir}/stage2.yaml"
 
 run_gen "$final_mapping" "$out_dir" \
-  -pkg ./examples/nested \
+  -pkg ./examples/nested-struct \
   -package casters || {
     warn "Generation had issues - check the output above"
     prompt_continue
@@ -226,7 +226,7 @@ prompt_continue
 # ============================================================================
 stage_start "Compile Check" "Verify generated code compiles"
 
-test_compile ./examples/nested || {
+test_compile ./examples/nested-struct || {
   warn "Compile check failed - may need additional transforms or fixes"
   scenario_partial "Review the errors above and implement missing transforms"
   exit 0

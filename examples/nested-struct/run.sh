@@ -58,9 +58,9 @@ version: "1"
 
 # Transform function declarations
 transforms:
-  - name: StringToUint
+  - name: nested_struct.StringToUint
     signature: "func(s string) uint"
-  - name: FloatToCents
+  - name: nested_struct.FloatToCents
     signature: "func(price float64) int64"
 
 mappings:
@@ -71,7 +71,7 @@ mappings:
       # ID string -> OrderID uint needs transform
       - source: ID
         target: OrderID
-        transform: StringToUint
+        transform: nested_struct.StringToUint
       # Items -> LineItems with dive for slice element conversion; pass OrderID down
       - source:
           Items: dive
@@ -99,7 +99,7 @@ mappings:
     fields:
       - source: ID
         target: CustomerID
-        transform: StringToUint
+        transform: nested_struct.StringToUint
     121:
       Email: EmailAddress
       Name: FullName
@@ -117,7 +117,7 @@ mappings:
         transform: OrderID2OrderID
       - source: UnitPrice
         target: PriceCents
-        transform: FloatToCents
+        transform: nested_struct.FloatToCents
     121:
       SKU: ProductSKU
       Name: ProductName

@@ -12,7 +12,8 @@ Imagine you have two toy boxes:
 
 In programmer talk: it generates code to convert one Go struct to another. It handles:
 - Nested structs
-- Slices and Arrays
+- Slices and Arrays (including nested: `[][]T`, `[][][]T`)
+- Maps (including nested: `map[K]map[K2]V`, `map[K][]V`)
 - Pointers (including nil checks)
 - Recursive types (safe cycle detection)
 
@@ -648,7 +649,70 @@ mappings:
 
 ---
 
-### Example 5: CI/CD Integration
+### Example 5: Nested Collections (Maps and Slices)
+
+**Scenario:** Convert types with nested maps and slices.
+
+The generator supports arbitrary nesting of collections:
+- `[][]T` - nested slices
+- `map[K]V` - simple maps  
+- `map[K][]V` - maps of slices
+- `map[K]map[K2]V` - nested maps
+
+```bash
+cd examples/nested-collections
+
+# Generate mapping for types with nested collections
+../../caster-generator gen -mapping map.yaml -out ./generated
+```
+
+**Source types (`source.go`):**
+```go
+type Source struct {
+    Data map[string][]SourceInner
+}
+
+type SourceInner struct {
+    Name string
+}
+```
+
+**Target types (`target.go`):**
+```go
+type Target struct {
+    Data map[string][]TargetInner
+}
+
+type TargetInner struct {
+    Name string
+}
+```
+
+**Generated code handles nested loops automatically:**
+```go
+func NestedcollectionsSourceToNestedcollectionsTarget(in Source) Target {
+    out := Target{}
+    
+    out.Data = make(map[string][]TargetInner, len(in.Data))
+    for k_0, v_0 := range in.Data {
+        out.Data[k_0] = make([]TargetInner, len(v_0))
+        for i_1 := range v_0 {
+            out.Data[k_0][i_1] = SourceInnerToTargetInner(v_0[i_1])
+        }
+    }
+    
+    return out
+}
+```
+
+**Key features:**
+- Automatic `make()` calls with correct capacity
+- Unique loop variables (`k_0`, `v_0`, `i_1`) for any nesting depth
+- Nested caster calls for struct elements
+
+---
+
+### Example 6: CI/CD Integration
 
 **Validate mappings in CI pipeline:**
 
@@ -685,7 +749,7 @@ jobs:
 
 ---
 
-### Example 6: Debugging Suggestions
+### Example 7: Debugging Suggestions
 
 When auto-suggestions aren't what you expect:
 

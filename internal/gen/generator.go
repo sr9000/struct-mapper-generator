@@ -1056,6 +1056,7 @@ func (g *Generator) isCollection(t *analyze.TypeInfo) bool {
 	if t == nil {
 		return false
 	}
+
 	return t.Kind == analyze.TypeKindSlice || t.Kind == analyze.TypeKindArray || t.Kind == analyze.TypeKindMap
 }
 

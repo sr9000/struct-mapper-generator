@@ -186,7 +186,7 @@ func TestGenerator_Generate_WithSliceMapping(t *testing.T) {
 
 	content := string(files[0].Content)
 	assert.Contains(t, content, "make([]string, len(in.Tags))")
-	assert.Contains(t, content, "for i := range in.Tags")
+	assert.Contains(t, content, "for i_0 := range in.Tags")
 }
 
 func TestGenerator_Generate_WithUnmappedTODOs(t *testing.T) {

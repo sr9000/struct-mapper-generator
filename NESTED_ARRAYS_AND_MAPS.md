@@ -111,8 +111,9 @@ type Inner struct { Name string }
     - Ensure `buildElementConversion` correctly delegates to `nestedFunctionName` or recursive calls.
     - **Implementation Details:** Refactored `buildElementConversion` to `buildValueConversion`. It now accepts source *expressions* instead of variable names, allowing it to work cleanly with the recursive loop generator. It correctly generates calls to nested casters for structs and pointer-to-structs.
 
-- [ ] **Step 6: Verification**
+- [x] **Step 6: Verification**
     - Run all example scripts covering all scenarios.
+    - **Implementation Details:** All `make test` passes. All `examples/**/run.sh` scripts pass (verified with `CG_NO_PROMPT=1`). Updated unit test `TestGenerator_Generate_WithSliceMapping` to expect `i_0` instead of `i` for loop variables. Updated `README.md` with nested collections feature description and new Example 5. Updated `STRUCTURE.md` to document `generateCollectionLoop` and related functions.
 
 ## Step 1: Create Reproductions
 
@@ -228,3 +229,10 @@ Check if any new unit tests are needed in `internal/gen`.
 
 ### Ideas what functions/structs needs to be patched/created
 - Add specific unit tests for `generateCollectionLoop` edge cases (e.g. nil maps, empty slices).
+
+### Implementation Summary
+- **Tests:** `make test` passes. Updated `TestGenerator_Generate_WithSliceMapping` to expect `i_0` loop variable.
+- **Examples:** All `examples/**/run.sh` pass when run with `CG_NO_PROMPT=1`.
+- **Documentation:** 
+  - `README.md`: Added nested collections to feature list, added Example 5 demonstrating `map[string][]T` support.
+  - `STRUCTURE.md`: Updated "Collection Mapping" section documenting `generateCollectionLoop`, `buildValueConversion`, and related helper functions.

@@ -1065,14 +1065,24 @@ type extraArg struct {
 | `sourceFieldExpr(paths []mapping.FieldPath, ...) string`                    | Build source expression (`in.Field`)  |
 | `wrapConversion(expr string, targetType *analyze.TypeInfo, imports) string` | Produce `Type(expr)`                  |
 
-#### Slice Mapping
+#### Collection Mapping (Slices, Arrays, Maps)
 
-| Function                                                     | Purpose                                |
-|--------------------------------------------------------------|----------------------------------------|
-| `buildSliceMapping(...)`                                     | Orchestrate slice mapping code         |
-| `generateSliceLoopCode(...)`                                 | Emit loop code for array/slice mapping |
-| `getSliceElementType(t *analyze.TypeInfo) *analyze.TypeInfo` | Get element type                       |
-| `buildElementConversion(...)`                                | Per-element conversion logic           |
+| Function                                                     | Purpose                                                         |
+|--------------------------------------------------------------|-----------------------------------------------------------------|
+| `buildSliceMapping(...)`                                     | Orchestrate slice/array mapping code                            |
+| `buildMapMapping(...)`                                       | Orchestrate map mapping code                                    |
+| `generateCollectionLoop(srcField, tgtField, srcType, tgtType, imports, depth)` | Unified recursive loop generation for all collection types |
+| `isCollection(t *analyze.TypeInfo) bool`                     | Check if type is a slice, array, or map                         |
+| `getSliceElementType(t *analyze.TypeInfo) *analyze.TypeInfo` | Get element type for slice/array                                |
+| `getMapKeyType(t *analyze.TypeInfo) *analyze.TypeInfo`       | Get key type for map                                            |
+| `getMapValueType(t *analyze.TypeInfo) *analyze.TypeInfo`     | Get value type for map                                          |
+| `buildValueConversion(srcExpr, srcType, tgtType, tgtTypeStr) string` | Per-element/value conversion logic                      |
+
+**`generateCollectionLoop` Details:**
+- **Recursion:** If elements are also collections (e.g., `[][]T` or `map[K][]V`), recursively generates nested loops
+- **Unique Variables:** Uses `depth` parameter to generate unique loop variables (`i_0`, `k_1`, `v_1`) avoiding shadowing
+- **Initialization:** Generates `make()` calls with proper type and capacity for slices and maps
+- **Struct Conversion:** Delegates to `buildValueConversion` which calls nested casters for struct elements
 
 #### Type Helpers
 

@@ -962,35 +962,101 @@ func (g *Generator) buildSliceMapping(
 			m.SourcePaths[0], m.TargetPaths[0])
 	}
 
-	return g.generateSliceLoopCode(srcField, tgtField, srcType, tgtType, imports)
+	return g.generateCollectionLoop(srcField, tgtField, srcType, tgtType, imports, 0)
 }
 
-func (g *Generator) generateSliceLoopCode(
+func (g *Generator) generateCollectionLoop(
 	srcField, tgtField string,
 	srcType, tgtType *analyze.TypeInfo,
 	imports map[string]importSpec,
+	depth int,
 ) string {
-	srcElem := g.getSliceElementType(srcType)
-	tgtElem := g.getSliceElementType(tgtType)
-
-	if srcElem == nil || tgtElem == nil {
-		return "// TODO: could not determine element types for slice mapping"
+	if srcType == nil || tgtType == nil {
+		return "// TODO: nil types in loop generation"
 	}
 
-	tgtElemStr := g.typeRefString(tgtElem, imports)
-	elemConv := g.buildElementConversion(srcField, srcElem, tgtElem, tgtElemStr)
+	// Handle Slices and Arrays
+	if (srcType.Kind == analyze.TypeKindSlice || srcType.Kind == analyze.TypeKindArray) &&
+		(tgtType.Kind == analyze.TypeKindSlice || tgtType.Kind == analyze.TypeKindArray) {
 
-	// Arrays are fixed size; slices are variable.
-	if srcType.Kind == analyze.TypeKindArray && tgtType.Kind == analyze.TypeKindArray {
-		return fmt.Sprintf(`for i := range %s {
-		%s[i] = %s
-	}`, srcField, tgtField, elemConv)
+		idxVar := fmt.Sprintf("i_%d", depth)
+		srcElem := g.getSliceElementType(srcType)
+		tgtElem := g.getSliceElementType(tgtType)
+
+		if srcElem == nil || tgtElem == nil {
+			return "// TODO: unknown element types"
+		}
+
+		// Initialization
+		initStmt := ""
+		if tgtType.Kind == analyze.TypeKindSlice {
+			initStmt = fmt.Sprintf("%s = make(%s, len(%s))\n",
+				tgtField, g.typeRefString(tgtType, imports), srcField)
+		}
+
+		// Loop header
+		loopHeader := fmt.Sprintf("for %s := range %s {", idxVar, srcField)
+
+		// Inner body
+		srcItem := fmt.Sprintf("%s[%s]", srcField, idxVar)
+		tgtItem := fmt.Sprintf("%s[%s]", tgtField, idxVar)
+
+		body := ""
+
+		// Recursion or conversion
+		if g.isCollection(srcElem) && g.isCollection(tgtElem) {
+			body = g.generateCollectionLoop(srcItem, tgtItem, srcElem, tgtElem, imports, depth+1)
+		} else {
+			// Leaf conversion
+			tgtElemStr := g.typeRefString(tgtElem, imports)
+			expr := g.buildValueConversion(srcItem, srcElem, tgtElem, tgtElemStr)
+			body = fmt.Sprintf("%s = %s", tgtItem, expr)
+		}
+
+		return fmt.Sprintf("%s%s\n\t%s\n}", initStmt, loopHeader, body)
 	}
 
-	return fmt.Sprintf(`%s = make([]%s, len(%s))
-	for i := range %s {
-		%s[i] = %s
-	}`, tgtField, tgtElemStr, srcField, srcField, tgtField, elemConv)
+	// Handle Maps
+	if srcType.Kind == analyze.TypeKindMap && tgtType.Kind == analyze.TypeKindMap {
+		keyVar := fmt.Sprintf("k_%d", depth)
+		valVar := fmt.Sprintf("v_%d", depth)
+
+		srcVal := g.getMapValueType(srcType)
+		tgtVal := g.getMapValueType(tgtType)
+
+		if srcVal == nil || tgtVal == nil {
+			return "// TODO: unknown map value types"
+		}
+
+		// Initialization
+		initStmt := fmt.Sprintf("%s = make(%s, len(%s))\n",
+			tgtField, g.typeRefString(tgtType, imports), srcField)
+
+		loopHeader := fmt.Sprintf("for %s, %s := range %s {", keyVar, valVar, srcField)
+
+		tgtItem := fmt.Sprintf("%s[%s]", tgtField, keyVar)
+
+		body := ""
+		if g.isCollection(srcVal) && g.isCollection(tgtVal) {
+			// For nested collections, we might need a block not just a string statement
+			body = g.generateCollectionLoop(valVar, tgtItem, srcVal, tgtVal, imports, depth+1)
+		} else {
+			tgtValStr := g.typeRefString(tgtVal, imports)
+			expr := g.buildValueConversion(valVar, srcVal, tgtVal, tgtValStr)
+			body = fmt.Sprintf("%s = %s", tgtItem, expr)
+		}
+
+		return fmt.Sprintf("%s%s\n\t%s\n}", initStmt, loopHeader, body)
+	}
+
+	return "// TODO: unsupported collection type combination " + srcType.Kind.String() + " -> " + tgtType.Kind.String()
+}
+
+func (g *Generator) isCollection(t *analyze.TypeInfo) bool {
+	if t == nil {
+		return false
+	}
+	return t.Kind == analyze.TypeKindSlice || t.Kind == analyze.TypeKindArray || t.Kind == analyze.TypeKindMap
 }
 
 func (g *Generator) getSliceElementType(t *analyze.TypeInfo) *analyze.TypeInfo {
@@ -1005,41 +1071,41 @@ func (g *Generator) getSliceElementType(t *analyze.TypeInfo) *analyze.TypeInfo {
 	return nil
 }
 
-func (g *Generator) buildElementConversion(
-	srcField string,
-	srcElem, tgtElem *analyze.TypeInfo,
-	tgtElemStr string,
+func (g *Generator) buildValueConversion(
+	srcExpr string,
+	srcType, tgtType *analyze.TypeInfo,
+	tgtTypeStr string,
 ) string {
-	if g.typesIdentical(srcElem, tgtElem) {
-		return srcField + "[i]"
+	if g.typesIdentical(srcType, tgtType) {
+		return srcExpr
 	}
 
-	if g.typesConvertible(srcElem, tgtElem) {
-		return fmt.Sprintf("%s(%s[i])", tgtElemStr, srcField)
+	if g.typesConvertible(srcType, tgtType) {
+		return fmt.Sprintf("%s(%s)", tgtTypeStr, srcExpr)
 	}
 
-	if srcElem.Kind == analyze.TypeKindStruct && tgtElem.Kind == analyze.TypeKindStruct {
-		casterName := g.nestedFunctionName(srcElem, tgtElem)
+	if srcType.Kind == analyze.TypeKindStruct && tgtType.Kind == analyze.TypeKindStruct {
+		casterName := g.nestedFunctionName(srcType, tgtType)
 
-		return fmt.Sprintf("%s(%s[i])", casterName, srcField)
+		return fmt.Sprintf("%s(%s)", casterName, srcExpr)
 	}
 
 	// Handle pointer-to-struct element conversion
-	if srcElem.Kind == analyze.TypeKindPointer && tgtElem.Kind == analyze.TypeKindPointer {
-		srcInner := srcElem.ElemType
-		tgtInner := tgtElem.ElemType
+	if srcType.Kind == analyze.TypeKindPointer && tgtType.Kind == analyze.TypeKindPointer {
+		srcInner := srcType.ElemType
+		tgtInner := tgtType.ElemType
 
 		if srcInner != nil && tgtInner != nil &&
 			srcInner.Kind == analyze.TypeKindStruct && tgtInner.Kind == analyze.TypeKindStruct {
 			casterName := g.nestedFunctionName(srcInner, tgtInner)
 
-			return fmt.Sprintf("func() %s { if %s[i] == nil { return nil }; v := %s(*%s[i]); return &v }()",
-				tgtElemStr, srcField, casterName, srcField)
+			return fmt.Sprintf("func() %s { if %s == nil { return nil }; v := %s(*%s); return &v }()",
+				tgtTypeStr, srcExpr, casterName, srcExpr)
 		}
 	}
 
 	// Fallback - hope for the best
-	return srcField + "[i]"
+	return srcExpr
 }
 
 // buildMapMapping generates the map mapping code.
@@ -1063,31 +1129,7 @@ func (g *Generator) buildMapMapping(
 			m.SourcePaths[0], m.TargetPaths[0])
 	}
 
-	srcKey := g.getMapKeyType(srcType)
-	srcVal := g.getMapValueType(srcType)
-	tgtKey := g.getMapKeyType(tgtType)
-	tgtVal := g.getMapValueType(tgtType)
-
-	if srcKey == nil || srcVal == nil || tgtKey == nil || tgtVal == nil {
-		return "// TODO: could not determine key/value types for map mapping"
-	}
-
-	tgtValStr := g.typeRefString(tgtVal, imports)
-
-	var elemConv string
-
-	// Special case: map of structs - use nested caster
-	if srcVal.Kind == analyze.TypeKindStruct && tgtVal.Kind == analyze.TypeKindStruct {
-		casterName := g.nestedFunctionName(srcVal, tgtVal)
-
-		elemConv = casterName + "(v)"
-	} else {
-		elemConv = g.buildElementConversion(srcField, srcVal, tgtVal, tgtValStr)
-	}
-
-	return fmt.Sprintf(`for k, v := range %s {
-	%s[k] = %s
-}`, srcField, tgtField, elemConv)
+	return g.generateCollectionLoop(srcField, tgtField, srcType, tgtType, imports, 0)
 }
 
 func (g *Generator) getMapKeyType(t *analyze.TypeInfo) *analyze.TypeInfo {

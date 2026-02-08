@@ -96,17 +96,20 @@ type Inner struct { Name string }
     - Updated `internal/plan` to resolve Map strategies.
     - Updated `internal/match` to recognize Map compatibility.
 
-- [ ] **Step 3: Refactor Loop Generation**
+- [x] **Step 3: Refactor Loop Generation**
     - Rename `generateSliceLoopCode` to `generateCollectionLoop`.
     - Add `depth` parameter for unique variable names (`i_0`, `k_0`, etc.).
     - Allow handling both Maps and Slices in one consistent structure.
+    - **Implementation Details:** Replaced `generateSliceLoopCode` with `generateCollectionLoop` which handles both Slices and Maps using a unified structure. Added `depth` parameter to ensure unique loop variables (`i_0`, `i_1`, `k_0`, etc.) in recursive calls.
 
-- [ ] **Step 4: Recursive Nesting**
+- [x] **Step 4: Recursive Nesting**
     - Update `generateCollectionLoop` to recurse if the element is also a collection.
     - Handles `[][]T` and `map[K][]V`.
+    - **Implementation Details:** `generateCollectionLoop` now checks if the element (or value) type is itself a collection using `isCollection`. If so, it recursively calls `generateCollectionLoop` with `depth+1`.
 
-- [ ] **Step 5: Struct Conversion in Maps/Slices**
+- [x] **Step 5: Struct Conversion in Maps/Slices**
     - Ensure `buildElementConversion` correctly delegates to `nestedFunctionName` or recursive calls.
+    - **Implementation Details:** Refactored `buildElementConversion` to `buildValueConversion`. It now accepts source *expressions* instead of variable names, allowing it to work cleanly with the recursive loop generator. It correctly generates calls to nested casters for structs and pointer-to-structs.
 
 - [ ] **Step 6: Verification**
     - Run all example scripts covering all scenarios.

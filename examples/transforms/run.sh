@@ -92,29 +92,29 @@ version: "1"
 # Signatures describe expected input/output types
 transforms:
   # Product transforms
-  - name: DollarsToCents
+  - name: transforms.DollarsToCents
     signature: "func(dollars float64) int64"
-  - name: ParseWeightGrams
+  - name: transforms.ParseWeightGrams
     signature: "func(weight string) int"
-  - name: YNToBool
+  - name: transforms.YNToBool
     signature: "func(yn string) bool"
-  - name: ParseDateTime
+  - name: transforms.ParseDateTime
     signature: "func(s string) time.Time"
-  - name: CSVToSlice
+  - name: transforms.CSVToSlice
     signature: "func(csv string) []string"
 
   # User transforms
-  - name: IntToUint
+  - name: transforms.IntToUint
     signature: "func(i int) uint"
-  - name: ConcatNames
+  - name: transforms.ConcatNames
     signature: "func(first, last string) string"
-  - name: NormalizePhone
+  - name: transforms.NormalizePhone
     signature: "func(phone string) string"
-  - name: ParseDate
+  - name: transforms.ParseDate
     signature: "func(s string) *time.Time"
-  - name: ExtractCity
+  - name: transforms.ExtractCity
     signature: "func(jsonAddr string) string"
-  - name: ExtractPostalCode
+  - name: transforms.ExtractPostalCode
     signature: "func(jsonAddr string) string"
 
 mappings:
@@ -128,19 +128,19 @@ mappings:
         target: Name
       - source: PriceUSD
         target: PriceCents
-        transform: DollarsToCents
+        transform: transforms.DollarsToCents
       - source: Weight
         target: WeightGrams
-        transform: ParseWeightGrams
+        transform: transforms.ParseWeightGrams
       - source: Available
         target: IsActive
-        transform: YNToBool
+        transform: transforms.YNToBool
       - source: LastModified
         target: UpdatedAt
-        transform: ParseDateTime
+        transform: transforms.ParseDateTime
       - source: Categories
         target: Tags
-        transform: CSVToSlice
+        transform: transforms.CSVToSlice
 
   # LegacyUser -> ModernUser
   - source: caster-generator/examples/transforms.LegacyUser
@@ -148,22 +148,22 @@ mappings:
     fields:
       - source: UserID
         target: ID
-        transform: IntToUint
+        transform: transforms.IntToUint
       - source: [FirstName, LastName]
         target: FullName
-        transform: ConcatNames
+        transform: transforms.ConcatNames
       - source: PhoneNumber
         target: Phone
-        transform: NormalizePhone
+        transform: transforms.NormalizePhone
       - source: BirthDate
         target: DateOfBirth
-        transform: ParseDate
+        transform: transforms.ParseDate
       - source: Address
         target: City
-        transform: ExtractCity
+        transform: transforms.ExtractCity
       - source: Address
         target: PostalCode
-        transform: ExtractPostalCode
+        transform: transforms.ExtractPostalCode
 EOF
 
 show_yaml_with_comments "${stages_dir}/stage2_merged.yaml" \

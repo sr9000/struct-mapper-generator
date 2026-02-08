@@ -94,16 +94,16 @@ version: "1"
 
 transforms:
   # Date/time parsing
-  - name: ParseISODate
+  - name: multi.ParseISODate
     signature: "func(s string) time.Time"
   # Currency conversion
-  - name: DollarsToCents
+  - name: multi.DollarsToCents
     signature: "func(dollars float64) int64"
   # ID formatting
-  - name: FormatOrderNumber
+  - name: multi.FormatOrderNumber
     signature: "func(id uint, ref string) string"
   # Address formatting
-  - name: FormatFullAddress
+  - name: multi.FormatFullAddress
     signature: "func(line1, city, state, postal, country string) string"
 
 mappings:
@@ -127,10 +127,10 @@ mappings:
         hint: dive
       - source: OrderDate
         target: PlacedAt
-        transform: ParseISODate
+        transform: multi.ParseISODate
       - source: TotalAmount
         target: TotalCents
-        transform: DollarsToCents
+        transform: multi.DollarsToCents
     ignore:
       - ID  # Internal ID is auto-generated
 
@@ -145,7 +145,7 @@ mappings:
         target: Quantity
       - source: UnitPrice
         target: PriceCents
-        transform: DollarsToCents
+        transform: multi.DollarsToCents
     ignore:
       - ID  # Auto-generated
 
@@ -173,7 +173,7 @@ mappings:
     fields:
       - source: [ID, ExternalRef]
         target: OrderNumber
-        transform: FormatOrderNumber
+        transform: multi.FormatOrderNumber
       - source: CustomerName
         target: Recipient
       - source: LineItems
@@ -200,7 +200,7 @@ mappings:
     fields:
       - source: [Line1, City, State, PostalCode, Country]
         target: FullAddress
-        transform: FormatFullAddress
+        transform: multi.FormatFullAddress
       - source: City
         target: City
       - source: State

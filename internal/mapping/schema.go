@@ -1,8 +1,6 @@
 package mapping
 
 import (
-	"errors"
-	"fmt"
 	"strings"
 
 	"caster-generator/internal/common"
@@ -313,92 +311,12 @@ type ExtraVal struct {
 	Def  ExtraDef `yaml:"def"`
 }
 
-// UnmarshalYAML implements yaml.Unmarshaler.
-func (e *ExtraVals) UnmarshalYAML(unmarshal func(any) error) error {
-	// Try list of full ExtraVal objects (explicit syntax)
-	var objects []ExtraVal
-	if err := unmarshal(&objects); err == nil {
-		*e = objects
-		return nil
-	}
-
-	// Try list of strings first
-	var list []string
-	if err := unmarshal(&list); err == nil {
-		result := make([]ExtraVal, len(list))
-		for i, s := range list {
-			result[i] = ExtraVal{Name: s, Def: ExtraDef{Source: s}}
-		}
-
-		*e = result
-
-		return nil
-	}
-
-	// Try single string
-	var single string
-	if err := unmarshal(&single); err == nil {
-		*e = []ExtraVal{{Name: single, Def: ExtraDef{Source: single}}}
-		return nil
-	}
-
-	// Try map
-	var m map[string]any
-	if err := unmarshal(&m); err == nil {
-		var result []ExtraVal
-
-		for k, v := range m {
-			// v can be string (implied source) or object
-			switch val := v.(type) {
-			case string:
-				result = append(result, ExtraVal{Name: k, Def: ExtraDef{Source: val}})
-			case map[string]any:
-				def := ExtraDef{}
-				if src, ok := val["source"].(string); ok {
-					def.Source = src
-				}
-
-				if tgt, ok := val["target"].(string); ok {
-					def.Target = tgt
-				}
-
-				result = append(result, ExtraVal{Name: k, Def: def})
-			default:
-				return fmt.Errorf("invalid extra definition for %s", k)
-			}
-		}
-		// Sort for determinism? Use Slice sort later if needed. Map iteration is random.
-		*e = result
-
-		return nil
-	}
-
-	return errors.New("expected string, list of strings, or map for extra (MODIFIED)")
-}
-
 // StringOrArray is a type that can be unmarshaled from either a string or an array of strings.
 // This allows YAML fields to accept both "field" and ["field1", "field2"].
 type StringOrArray []string
 
 // StringArray is a string slice that can be unmarshaled from a single string or a list.
 type StringArray []string
-
-// UnmarshalYAML implements yaml.Unmarshaler.
-func (s *StringArray) UnmarshalYAML(unmarshal func(any) error) error {
-	var single string
-	if err := unmarshal(&single); err == nil {
-		*s = []string{single}
-		return nil
-	}
-
-	var multi []string
-	if err := unmarshal(&multi); err == nil {
-		*s = multi
-		return nil
-	}
-
-	return errors.New("expected string or list of strings")
-}
 
 // Cardinality represents the mapping cardinality.
 type Cardinality int
@@ -589,36 +507,6 @@ type FieldRefOrString struct {
 	FieldRef
 }
 
-// UnmarshalYAML implements the yaml.Unmarshaler interface.
-func (f *FieldRefOrString) UnmarshalYAML(unmarshal func(any) error) error {
-	var s string
-	if err := unmarshal(&s); err == nil {
-		f.Path = s
-		f.Hint = HintNone
-
-		return nil
-	}
-
-	var ref FieldRef
-	if err := unmarshal(&ref); err == nil {
-		*f = FieldRefOrString{ref}
-		return nil
-	}
-
-	// Try map for hint structure {Path: Hint}
-	var m map[string]string
-	if err := unmarshal(&m); err == nil && len(m) == 1 {
-		for k, v := range m {
-			f.Path = k
-			f.Hint = IntrospectionHint(v)
-		}
-
-		return nil
-	}
-
-	return errors.New("expected string or field reference")
-}
-
 // ArgDef represents an argument definition (name and type).
 // Can be simpler string "name" (type is inferred or interface{}) or complex {name: type}.
 type ArgDef struct {
@@ -628,61 +516,3 @@ type ArgDef struct {
 
 // ArgDefArray unmarshals a list of arguments.
 type ArgDefArray []ArgDef
-
-// UnmarshalYAML implements yaml.Unmarshaler.
-func (a *ArgDefArray) UnmarshalYAML(unmarshal func(any) error) error {
-	var list []any
-	if err := unmarshal(&list); err != nil {
-		return err
-	}
-
-	result := make([]ArgDef, 0, len(list))
-	for _, item := range list {
-		switch v := item.(type) {
-		case string:
-			result = append(result, ArgDef{Name: v, Type: "interface{}"})
-		case map[string]any:
-			// Check if this is an explicit object definition (has "name" key)
-			if nameVal, hasName := v["name"]; hasName {
-				name, ok := nameVal.(string)
-				if !ok {
-					return errors.New("invalid argument name, expected string")
-				}
-
-				typeStr := "interface{}"
-
-				if typeVal, hasType := v["type"]; hasType {
-					if ts, ok := typeVal.(string); ok {
-						typeStr = ts
-					} else {
-						return errors.New("invalid argument type, expected string")
-					}
-				}
-
-				result = append(result, ArgDef{Name: name, Type: typeStr})
-
-				continue
-			}
-
-			// Fallback to Key-Value definition: { "paramName": "paramType" }
-			if len(v) != 1 {
-				return errors.New("invalid argument definition, expected {name: type} or {name: ..., type: ...}")
-			}
-
-			for k, val := range v {
-				typeStr, ok := val.(string)
-				if !ok {
-					return fmt.Errorf("invalid argument type for %s, expected string", k)
-				}
-
-				result = append(result, ArgDef{Name: k, Type: typeStr})
-			}
-		default:
-			return errors.New("expected string or map for argument definition")
-		}
-	}
-
-	*a = result
-
-	return nil
-}

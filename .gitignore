@@ -32,3 +32,4 @@ go.work.sum
 /examples/**/missing_types.go
 /examples/**/generated/
 /examples/**/stages/
+/caster-generator

@@ -1,26 +1,58 @@
 # Caster Generator Refactoring Plan
 
-This document coordinates the refactoring efforts across the codebase. Refactoring plans are separated by package to maintain focus and clarity.
+This document coordinates refactoring efforts across the codebase. Package-level refactor plans live alongside the code (see links below), but this file defines the overall sequencing, invariants, and acceptance criteria.
 
-## Refactoring Modules
+## Refactor Contract (must not change)
 
-### 1. `internal/mapping`
-Focuses on simplifying the YAML schema, loader, and validation logic.
-- **Detailed Plan**: [internal/mapping/REFACTOR.md](internal/mapping/REFACTOR.md)
-- **Key Goals**: Separate YAML mechanics from domain types, reduce validation complexity.
+These are the safety rails for all refactors in this repo:
 
-### 2. `internal/plan`
-Focuses on decomposing the monolithic resolver and suggestion export logic.
-- **Detailed Plan**: [internal/plan/REFACTOR.md](internal/plan/REFACTOR.md)
-- **Key Goals**: Extract AutoMatch, Strategy Selection, and Virtual Type management into focused components.
+- **YAML compatibility**: The mapping YAML schema stays compatible. Loading, defaults, and normalization must not break existing mapping files.
+- **Determinism**:
+  - Suggestion export (`internal/plan`) must be stable: ordering of types/fields/suggestions is deterministic.
+  - Code generation (`internal/gen`) must be stable: file set, file names, import ordering/aliasing, and emitted code ordering are deterministic.
+- **Type-walking semantics**: Pointer/leaf behavior must remain consistent between mapping validation and plan resolution (or be intentionally different with tests proving the contract).
 
-### 3. `internal/gen`
-Focuses on decomposing the monolithic generator and template data preparation logic.
-- **Detailed Plan**: [internal/gen/REFACTOR.md](internal/gen/REFACTOR.md)
-- **Key Goals**: Separate template data building, strategy application, and collection loop generation.
+If a change intentionally modifies behavior or output, the PR must:
+1) state the intended diff, and 2) add/adjust tests to lock it in.
 
-## Overall Objectives
+## Dependency Ordering (do this first → last)
 
-- **Maintainability**: Reduce the size of monolithic files (`resolver.go`, `schema.go`).
-- **Separation of Concerns**: Ensure each component has a single, clear responsibility.
-- **Readability**: Make the complex matching and resolution logic easier for new contributors to follow.
+1. `internal/mapping` (schema, YAML codecs, loader, validation)
+2. `internal/plan` (resolver decomposition + suggestion export)
+3. `internal/gen` (generator decomposition)
+
+Rationale: `plan` depends on `mapping` primitives/semantics, and `gen` depends on the resolved plan shape and strategy semantics.
+
+## Milestones (PR-sized)
+
+### Milestone 0 — Lock behavior with tests
+Acceptance criteria:
+- `go test ./...` passes.
+- Add/confirm tests focusing on determinism and seam boundaries (path parsing, hint resolution, strategy selection, export ordering, generator determinism).
+
+### Milestone 1 — Refactor `internal/mapping` (move-only first)
+Acceptance criteria:
+- No output diffs in examples (except whitespace/comments if explicitly intended).
+- Validation behavior unchanged (especially path validation + pointer deref rules).
+
+### Milestone 2 — Refactor `internal/plan` resolver/export
+Acceptance criteria:
+- Resolver results unchanged for existing integration tests.
+- Suggestion export ordering remains deterministic.
+- Unit tests exist for strategy selection and pointer/leaf rules.
+
+### Milestone 3 — Refactor `internal/gen` generator
+Acceptance criteria:
+- Generated code remains deterministic and compiles across existing examples/tests.
+- Import aliasing/type formatting behavior unchanged (unless explicitly changed with tests).
+
+### Milestone 4 — Optional cleanups
+Only after milestones 0–3 are green:
+- Consider de-duplicating type-walk helpers (likely via `internal/analyze` with explicit options).
+- Consider relocating string-type-ID resolution into a more appropriate package if it becomes a stable API.
+
+## Refactoring Modules (detailed package plans)
+
+- `internal/mapping`: [internal/mapping/REFACTOR.md](internal/mapping/REFACTOR.md)
+- `internal/plan`: [internal/plan/REFACTOR.md](internal/plan/REFACTOR.md)
+- `internal/gen`: [internal/gen/REFACTOR.md](internal/gen/REFACTOR.md)

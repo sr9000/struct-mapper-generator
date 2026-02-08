@@ -1,58 +1,96 @@
 # Refactoring Plan: `internal/plan`
 
-This document outlines a plan to simplify and refactor the resolution and export logic in `internal/plan`.
+This document outlines an incremental plan to simplify and refactor the resolution and export logic in `internal/plan`.
 
-## Current Status
+## Scope and constraints
 
-The following files identify as candidates for refactoring due to size and monolithic design:
+- Depends on `internal/mapping` semantics; avoid changing mapping contracts during plan refactors.
+- Keep resolver results stable for existing integration tests.
+- Keep suggestion export deterministic (ordering and formatting should be stable).
 
-- **`internal/plan/export.go`** (780 lines): Handles both data conversion and detailed YAML AST construction for suggestions.
-- **`internal/plan/resolver.go`** (1402 lines): A monolithic coordinator managing iteration, recursion, matching, and strategy selection.
+## Current status
 
-## Objectives
+Candidates for refactoring due to size and mixed responsibilities:
 
-1. **Decompose Monoliths**: Break down the large `Resolver` and `Export` logic into focused components.
-2. **Encapsulation**: Hide complex YAML AST manipulation and matching heuristics behind simpler interfaces.
-3. **Improve Testability**: Make individual components like `AutoMatcher` and `StrategySelector` independently testable.
+- `export.go` (~780 LOC): mixes suggestion modeling and YAML AST construction (comments, ordering).
+- `resolver.go` (~1402 LOC): monolithic coordinator (iteration, recursion, automatching, strategy selection, virtual types, dependency ordering).
 
-## Proposed Steps
+## Milestone 0 — Lock behavior (recommended first)
 
-### 1. Refactor `internal/plan/export.go` (Suggestion Generation)
-The export logic is complex because it builds YAML nodes with comments based on match quality.
+Add/confirm unit tests for the most fragile seams:
 
-* **Target File**: `internal/plan/suggestion_generator.go` (new)
-* **Actions**:
-    * Extract `GenerateSuggestions(plan)` which returns a `mapping.MappingFile` or similar intermediate structure.
-    * Create a `SuggestionBuilder` or `YAMLBuilder` struct to encapsulate the verbose `yaml.Node` construction.
-    * Separate logic like `appendIgnore` (which formats rejection reasons) from the raw YAML production.
+- Strategy selection:
+  - hint-based overrides
+  - kind-based determination
+  - incompatible/transform-needed paths
+- Type walking rules (pointer/leaf behavior) used by `resolveFieldType`.
+- Suggestion export determinism (stable ordering).
 
-### 2. Refactor `internal/plan/resolver.go` (Automatching)
-Automatching is a large chunk of the resolver.
+Acceptance criteria:
+- `go test ./...` passes.
 
-* **Target File**: `internal/plan/automatch.go` (new)
-* **Actions**:
-    * Extract `AutoMatcher` struct.
-    * Move `autoMatchRemainingFields` logic here. 
-    * Responsibility: Given source/target types and existing mappings, identify auto-match candidates using `internal/match`.
+## Milestone 1 — Split `resolver.go` by responsibility
 
-### 3. Refactor `internal/plan/resolver.go` (Strategy Selection)
-Determining *how* to convert one type to another is a distinct concern.
+Keep external APIs stable; this should primarily be mechanical extraction.
 
-* **Target File**: `internal/plan/strategy_selector.go` (new)
-* **Actions**:
-    * Move `determineStrategyFromCandidate` and strategy-related constants (e.g., `explSliceMap`, `explPointerWrap`).
-    * Responsibility: Map `match.Candidate` results to `ConversionStrategy`.
+### 1) Strategy selection module (do first)
+- **Target file**: `internal/plan/strategy_selector.go` (new)
+- **Move**:
+  - `determineStrategy*` functions
+  - `determineStrategyFromCandidate`
+  - strategy explanation constants (e.g. `explSliceMap`, `explPointerWrap`)
+  - keep `resolveFieldType` close to these rules
 
-### 4. Refactor `internal/plan/resolver.go` (Virtual Types)
-Managing target type generation.
+Why first: it’s a well-defined seam and is easy to unit test independently.
 
-* **Target File**: `internal/plan/virtual_types.go` (new)
-* **Actions**:
-    * Move `preCreateVirtualTypes` and `createVirtualTargetType`.
-    * Responsibility: Populate the `TypeGraph` with generated types before or during resolution.
+### 2) Automatch module
+- **Target file**: `internal/plan/automatch.go` (new)
+- **Move**:
+  - `autoMatchRemainingFields` and candidate scoring/selection
 
-## Expected Outcome
+### 3) Virtual types module
+- **Target file**: `internal/plan/virtual_types.go` (new)
+- **Move**:
+  - `preCreateVirtualTypes`, `createVirtualTargetType`, and any purely-virtual helpers
 
-* **`resolver.go`**: Reduced significantly by delegating to specialized components. The core loop will become much clearer.
-* **`export.go`**: Cleanly separated into suggestion logic and YAML output logic.
-* **Testability**: Heuristics for matching and strategy selection can be tested without running the full resolution pipeline.
+### 4) Dependency ordering module
+- **Target file**: `internal/plan/dependencies.go` (new)
+- **Move**:
+  - `populateExtraTargetDependencies` and related ordering/cycle helpers
+
+### 5) Resolver core left behind
+After extraction, `resolver.go` (or `resolver_core.go`) should focus on:
+- orchestration (`Resolve`, `resolveTypeMapping`)
+- recursion/caching (`resolvedPairs`)
+- calling sub-components
+
+Acceptance criteria:
+- Integration tests unchanged.
+- New unit tests for `strategy_selector` and pointer/leaf rules.
+
+Risk hotspots (add/keep tests here):
+- virtual type creation interacting with strategy selection
+- dependency ordering affecting assignment order
+
+## Milestone 2 — Split `export.go` into model vs YAML rendering
+
+### 1) Suggestions model
+- **Target file**: `internal/plan/suggestions_model.go` (new)
+- **Responsibility**: build an intermediate “suggestions model” (could be `mapping.MappingFile` or a dedicated struct) from resolved plan data.
+
+### 2) YAML builder
+- **Target file**: `internal/plan/suggestions_yaml.go` (new)
+- **Responsibility**: transform the model into `yaml.Node` (comments, formatting, ordering).
+
+Optional improvement:
+- Introduce a small `YAMLBuilder` struct to reduce parameter threading and isolate formatting rules.
+
+Acceptance criteria:
+- Export remains deterministic.
+- Snapshot/golden-style tests exist for ordering (even if minimal).
+
+## Expected outcome
+
+- Resolver becomes readable: orchestration + small focused modules.
+- Strategy selection and automatch become unit-testable without running full resolve.
+- Export logic becomes two-phase (model then rendering), reducing YAML AST complexity in core logic.

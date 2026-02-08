@@ -1,66 +1,85 @@
 # Refactoring Plan: `internal/gen`
 
-This document outlines a plan to simplify and refactor the code generation logic in `internal/gen`.
+This document outlines an incremental plan to simplify and refactor the code generation logic in `internal/gen`.
 
-## Current Status
+## Scope and constraints
 
-The primary candidate for refactoring is:
+- `internal/gen` depends on `internal/plan` output shape and strategy semantics; refactor `plan` first.
+- Generated output must remain:
+  - **deterministic** (stable files, stable import aliases/order, stable statement order)
+  - **compilable** across all examples/tests
 
-- **`internal/gen/generator.go`** (1854 lines): A monolithic file handling template data preparation, strategy application, collection loop generation, type reference formatting, and file I/O.
+## Current status
 
-## Objectives
+Primary refactor candidate:
 
-1. **Decompose Monoliths**: Break down `Generator` into specialized components.
-2. **Isolate Template Logic**: Separate data preparation from code generation mechanics.
-3. **Encapsulate Domain Logic**: Move strategies (slice/map/pointer logic) into dedicated handlers.
+- `generator.go` (~1854 LOC): template data preparation, strategy application, collection loop generation, type formatting/imports, and file I/O are all mixed.
 
-## Proposed Steps
+## Milestone 0 — Lock behavior (recommended first)
 
-### 1. Extract Template Data Building
-The logic for converting a `ResolvedTypePair` into `templateData` is complex and mixes type analysis with view logic.
+Add/confirm tests focused on generator stability:
 
-* **Target File**: `internal/gen/template_builder.go` (new)
-* **Actions**:
-    * Move `buildTemplateData`, `buildAssignment`, and `collectNestedCasters` here.
-    * Responsibility: Prepare the data structure required by the Go templates.
+- Deterministic imports and type formatting.
+- Stable output across representative example cases (pointers, nested structs, collections).
 
-### 2. Extract Strategy Application
-The `switch` statement in `applyConversionStrategy` handles many disparate logic paths (pointers, nested casts, transforms).
+Acceptance criteria:
+- `go test ./...` passes.
 
-* **Target File**: `internal/gen/strategies.go` (new)
-* **Actions**:
-    * Move `applyConversionStrategy` and all specific strategy methods (`applyConvertStrategy`, `applyPointerDerefStrategy`, etc.).
-    * Responsibility: Mutate the `assignmentData` based on the chosen conversion strategy.
+## Milestone 1 — Extract type formatting + import management (high leverage)
 
-### 3. Extract Collection Generation
-Generating loops for slices and maps involves recursive logic for nested collections.
+Type formatting/import aliasing tends to cause subtle regressions; isolating it early reduces risk.
 
-* **Target File**: `internal/gen/collections.go` (new)
-* **Actions**:
-    * Move `buildSliceMapping`, `buildMapMapping`, and `generateCollectionLoop`.
-    * Move `buildValueConversion` helper methods.
-    * Responsibility: Generate Go code strings for iterating and converting collection types.
+- **Target file**: `internal/gen/type_formatter.go` (new)
+- **Move**:
+  - `typeRef`, `typeRefString`, `getPkgName`
+  - any import alias management helpers
 
-### 4. Extract Type Formatting
-Formatting type strings (handling pointers, slices, packages imports) is a utility concern.
+Acceptance criteria:
+- Generated files compile with identical imports (ordering/aliases stable).
 
-* **Target File**: `internal/gen/type_formatter.go` (new) or `internal/gen/types.go`
-* **Actions**:
-    * Move `typeRef`, `typeRefString`, `getPkgName`, and import management logic.
-    * Responsibility: consistently format Go type representations and manage import aliases.
+## Milestone 2 — Extract template/view-model building
 
-### 5. Simplify `generator.go`
-After steps 1-4, `generator.go` should focus on the high-level orchestration.
+- **Target file**: `internal/gen/template_builder.go` (new)
+- **Move**:
+  - `buildTemplateData`, `buildAssignment`, `collectNestedCasters`
 
-* **Remaining content**:
-    * `Generator` struct and config.
-    * `Generate(plan)` entry point.
-    * File generation loop.
-    * Handling of missing types/transforms (which could also be extracted later).
+Goal: keep this layer as pure as possible (no filesystem, minimal formatting), to enable unit tests.
 
-## Expected Outcome
+Acceptance criteria:
+- No generated output diffs.
 
-* **`generator.go`**: Reduced from ~1850 lines to < 400 lines (orchestration only).
-* **`strategies.go`**: Encapsulates the specific "how-to" of code generation for each mapping type.
-* **`collections.go`**: Isolates the complex recursive loop generation logic.
-* **`template_builder.go`**: clear separation between the "Plan" model and the "View" model.
+## Milestone 3 — Extract strategy application
+
+- **Target file**: `internal/gen/strategies.go` (new)
+- **Move**:
+  - `applyConversionStrategy` and all strategy-specific helpers (pointer, nested casts, transform calls, etc.)
+
+Acceptance criteria:
+- Strategy selection behavior unchanged; emit identical code for existing tests.
+
+## Milestone 4 — Extract collection generation
+
+- **Target file**: `internal/gen/collections.go` (new)
+- **Move**:
+  - slice/map/array conversion helpers
+  - recursive loop generation helpers (`generateCollectionLoop`, value conversion helpers)
+
+Acceptance criteria:
+- Nested collection examples remain stable and compile.
+
+## Milestone 5 — Simplify `generator.go` orchestration
+
+After milestones 1–4, `generator.go` should focus on:
+- `Generator` struct/config
+- `Generate(plan)` entry point
+- file emission loop + gofmt
+- missing types/transforms emission (optional extraction later)
+
+Acceptance criteria:
+- `generator.go` is primarily orchestration (< ~400 LOC target is reasonable).
+
+## Expected outcome
+
+- Core generator logic becomes modular and testable.
+- Determinism is easier to preserve (type formatting/imports are isolated).
+- `generator.go` becomes a readable coordinator instead of the single place where everything happens.

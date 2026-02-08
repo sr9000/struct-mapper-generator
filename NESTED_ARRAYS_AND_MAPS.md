@@ -83,15 +83,18 @@ type Inner struct { Name string }
 
 ## Step-by-Step Implementation Plan
 
-- [ ] **Step 1: Create Reproductions**
-    - Create `examples/nested-slice` with failing `run.sh`.
-    - Create `examples/nested-map` with failing `run.sh`.
-    - Create `examples/maps` with failing `run.sh`.
-    - Create `examples/nested-collections` with failing `run.sh`.
+- [x] **Step 1: Create Reproductions**
+    - Created `examples/nested-slice` with `run.sh`.
+    - Created `examples/maps` with `run.sh`.
+    - Created `examples/nested-collections` with `run.sh`.
+    - Note: Used `SourceInner`/`TargetInner` to ensure clean type separation.
 
-- [ ] **Step 2: Map Support (Level 1)**
-    - Modify `internal/gen/generator.go` to recognize `TypeKindMap`.
-    - Implement simple `map` copying loop.
+- [x] **Step 2: Map Support (Level 1)**
+    - Modified `internal/gen/generator.go` to recognize `TypeKindMap` and implement `StrategyMap`.
+    - Implemented simple `map` copying loop in `buildMapMapping`.
+    - Updated `internal/analyze` to support loading Map types.
+    - Updated `internal/plan` to resolve Map strategies.
+    - Updated `internal/match` to recognize Map compatibility.
 
 - [ ] **Step 3: Refactor Loop Generation**
     - Rename `generateSliceLoopCode` to `generateCollectionLoop`.

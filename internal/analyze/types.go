@@ -32,6 +32,7 @@ const (
 	TypeKindPointer           // pointer to another type
 	TypeKindSlice             // slice of another type
 	TypeKindArray             // array of another type
+	TypeKindMap               // map of another type
 	TypeKindAlias             // type alias (named type wrapping another)
 	TypeKindExternal          // external/opaque type (e.g., time.Time)
 )
@@ -49,6 +50,8 @@ func (k TypeKind) String() string {
 		return "slice"
 	case TypeKindArray:
 		return "array"
+	case TypeKindMap:
+		return "map"
 	case TypeKindAlias:
 		return "alias"
 	case TypeKindExternal:
@@ -64,6 +67,7 @@ type TypeInfo struct {
 	Kind        TypeKind    // Kind of type
 	Underlying  *TypeInfo   // For named types, the underlying type
 	ElemType    *TypeInfo   // For pointers and slices, the element type
+	KeyType     *TypeInfo   // For maps, the key type
 	Fields      []FieldInfo // For structs, the list of fields
 	GoType      types.Type  // The original go/types.Type (for compatibility checks)
 	IsGenerated bool        // True if the type is virtual/generated

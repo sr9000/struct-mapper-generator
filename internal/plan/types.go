@@ -121,6 +121,8 @@ const (
 	StrategyPointerWrap
 	// StrategySliceMap - map over slice elements.
 	StrategySliceMap
+	// StrategyMap - explicit map function.
+	StrategyMap
 	// StrategyPointerNestedCast - call nested caster on pointer with nil check.
 	StrategyPointerNestedCast
 	// StrategyNestedCast - call nested caster function.
@@ -146,6 +148,8 @@ func (s ConversionStrategy) String() string {
 		return "pointer_wrap"
 	case StrategySliceMap:
 		return "slice_map"
+	case StrategyMap:
+		return "map_map"
 	case StrategyPointerNestedCast:
 		return "pointer_nested_cast"
 	case StrategyNestedCast:

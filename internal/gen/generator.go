@@ -419,6 +419,9 @@ type assignmentData struct {
 	IsSlice      bool
 	SliceElemVar string
 	SliceBody    string
+	// For map mapping
+	IsMap   bool
+	MapBody string
 	// For nested caster
 	NestedCaster string
 	// For nil check wrapper
@@ -715,6 +718,10 @@ func (g *Generator) applyConversionStrategy(
 		assignment.IsSlice = true
 		assignment.SliceElemVar = "i"
 		assignment.SliceBody = g.buildSliceMapping(m, pair, imports)
+
+	case plan.StrategyMap:
+		assignment.IsMap = true
+		assignment.MapBody = g.buildMapMapping(m, pair, imports)
 
 	case plan.StrategyPointerNestedCast:
 		g.applyPointerNestedCastStrategy(assignment, m, pair, imports)
@@ -1035,6 +1042,70 @@ func (g *Generator) buildElementConversion(
 	return srcField + "[i]"
 }
 
+// buildMapMapping generates the map mapping code.
+func (g *Generator) buildMapMapping(
+	m *plan.ResolvedFieldMapping,
+	pair *plan.ResolvedTypePair,
+	imports map[string]importSpec,
+) string {
+	if len(m.SourcePaths) == 0 || len(m.TargetPaths) == 0 {
+		return ""
+	}
+
+	srcField := "in." + m.SourcePaths[0].String()
+	tgtField := "out." + m.TargetPaths[0].String()
+
+	srcType := g.getFieldTypeInfo(pair.SourceType, m.SourcePaths[0].String())
+	tgtType := g.getFieldTypeInfo(pair.TargetType, m.TargetPaths[0].String())
+
+	if srcType == nil || tgtType == nil {
+		return fmt.Sprintf("// TODO: could not determine types for map mapping %s -> %s",
+			m.SourcePaths[0], m.TargetPaths[0])
+	}
+
+	srcKey := g.getMapKeyType(srcType)
+	srcVal := g.getMapValueType(srcType)
+	tgtKey := g.getMapKeyType(tgtType)
+	tgtVal := g.getMapValueType(tgtType)
+
+	if srcKey == nil || srcVal == nil || tgtKey == nil || tgtVal == nil {
+		return "// TODO: could not determine key/value types for map mapping"
+	}
+
+	tgtValStr := g.typeRefString(tgtVal, imports)
+
+	var elemConv string
+
+	// Special case: map of structs - use nested caster
+	if srcVal.Kind == analyze.TypeKindStruct && tgtVal.Kind == analyze.TypeKindStruct {
+		casterName := g.nestedFunctionName(srcVal, tgtVal)
+
+		elemConv = casterName + "(v)"
+	} else {
+		elemConv = g.buildElementConversion(srcField, srcVal, tgtVal, tgtValStr)
+	}
+
+	return fmt.Sprintf(`for k, v := range %s {
+	%s[k] = %s
+}`, srcField, tgtField, elemConv)
+}
+
+func (g *Generator) getMapKeyType(t *analyze.TypeInfo) *analyze.TypeInfo {
+	if t.Kind == analyze.TypeKindMap && t.KeyType != nil {
+		return t.KeyType
+	}
+
+	return nil
+}
+
+func (g *Generator) getMapValueType(t *analyze.TypeInfo) *analyze.TypeInfo {
+	if t.Kind == analyze.TypeKindMap && t.ElemType != nil {
+		return t.ElemType
+	}
+
+	return nil
+}
+
 // buildTransformArgs builds the argument list for a transform function call.
 func (g *Generator) buildTransformArgs(paths []mapping.FieldPath, pair *plan.ResolvedTypePair) string {
 	args := make([]string, 0, len(paths))
@@ -1302,6 +1373,20 @@ func (g *Generator) typeRefString(t *analyze.TypeInfo, imports map[string]import
 
 		return "[]" + common.InterfaceTypeStr
 
+	case analyze.TypeKindMap:
+		key := common.InterfaceTypeStr
+		val := common.InterfaceTypeStr
+
+		if t.KeyType != nil {
+			key = g.typeRefString(t.KeyType, imports)
+		}
+
+		if t.ElemType != nil {
+			val = g.typeRefString(t.ElemType, imports)
+		}
+
+		return "map[" + key + "]" + val
+
 	case analyze.TypeKindArray:
 		// Keep length information by using go/types' string.
 		// This avoids having to store the array length explicitly in TypeInfo.
@@ -1347,7 +1432,7 @@ func (g *Generator) zeroValueForType(ft *analyze.TypeInfo) string {
 	case analyze.TypeKindBasic:
 		return g.zeroValueForBasicType(ft.ID.Name)
 
-	case analyze.TypeKindPointer, analyze.TypeKindSlice, analyze.TypeKindArray:
+	case analyze.TypeKindPointer, analyze.TypeKindSlice, analyze.TypeKindArray, analyze.TypeKindMap:
 		return "nil"
 
 	case analyze.TypeKindStruct:
@@ -1438,6 +1523,7 @@ func {{.FunctionName}}(in {{.SourceType}}{{range .ExtraArgs}}, {{.Name}} {{.Type
 {{range .Assignments}}
 {{if .Comment}}	// {{.Comment}}
 {{end}}{{if .IsSlice}}	{{.SliceBody}}
+{{else if .IsMap}}	{{.MapBody}}
 {{else if .NeedsNilCheck}}	if ({{if .NilCheckExpr}}{{.NilCheckExpr}}{{else}}{{.SourceExpr}}{{end}}) != nil {
 		{{.TargetField}} = {{.SourceExpr}}
 	} else {

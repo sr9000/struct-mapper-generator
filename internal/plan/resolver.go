@@ -19,6 +19,7 @@ const (
 	explPointerNestedCast = "pointer nested cast"
 	explPointerDeref      = "pointer deref"
 	explPointerWrap       = "pointer wrap"
+	explMap               = "map copy"
 )
 
 // ResolutionConfig holds configuration for the resolution process.
@@ -564,6 +565,12 @@ func (r *Resolver) determineStrategyByKind(
 			}
 
 			return StrategySliceMap, explSliceMap
+		case analyze.TypeKindMap:
+			if hint == mapping.HintDive {
+				return StrategyMap, "map copy (dive)"
+			}
+
+			return StrategyMap, explMap
 		case analyze.TypeKindPointer:
 			// Check element types
 			if sourceFieldType.ElemType != nil && targetFieldType.ElemType != nil {
@@ -867,6 +874,11 @@ func (r *Resolver) determineStrategyFromCandidate(cand *match.Candidate) (Conver
 			if srcKind == analyze.TypeKindArray && tgtKind == analyze.TypeKindArray {
 				return StrategySliceMap, "array map"
 			}
+
+			// Handle map-to-map
+			if srcKind == analyze.TypeKindMap && tgtKind == analyze.TypeKindMap {
+				return StrategyMap, "map copy"
+			}
 		}
 
 		return StrategyTransform, cand.TypeCompat.Reason
@@ -887,6 +899,10 @@ func (r *Resolver) determineStrategyFromCandidate(cand *match.Candidate) (Conver
 
 			if srcKind == analyze.TypeKindArray && tgtKind == analyze.TypeKindArray {
 				return StrategySliceMap, "array map"
+			}
+
+			if srcKind == analyze.TypeKindMap && tgtKind == analyze.TypeKindMap {
+				return StrategyMap, "map copy"
 			}
 		}
 

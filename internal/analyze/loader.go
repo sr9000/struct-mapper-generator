@@ -145,6 +145,11 @@ func (a *Analyzer) analyzeType(t types.Type) *TypeInfo {
 		info.Kind = TypeKindArray
 		info.ElemType = a.analyzeType(tt.Elem())
 
+	case *types.Map:
+		info.Kind = TypeKindMap
+		info.KeyType = a.analyzeType(tt.Key())
+		info.ElemType = a.analyzeType(tt.Elem())
+
 	case *types.Struct:
 		info.Kind = TypeKindStruct
 		a.analyzeStructFields(tt, info)

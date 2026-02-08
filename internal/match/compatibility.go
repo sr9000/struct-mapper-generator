@@ -153,6 +153,14 @@ func needsTransform(source, target types.Type) bool {
 		}
 	}
 
+	// Map to map (structurally similar)
+	_, sourceIsMap := sourceUnderlying.(*types.Map)
+	_, targetIsMap := targetUnderlying.(*types.Map)
+
+	if sourceIsMap && targetIsMap {
+		return true
+	}
+
 	// Struct to struct (might have compatible fields)
 	_, sourceIsStruct := sourceUnderlying.(*types.Struct)
 	_, targetIsStruct := targetUnderlying.(*types.Struct)

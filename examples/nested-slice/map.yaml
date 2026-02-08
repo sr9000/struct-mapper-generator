@@ -1,0 +1,4 @@
+version: "1"
+mappings:
+  - source: caster-generator/examples/nested-slice.Source
+    target: caster-generator/examples/nested-slice.Target

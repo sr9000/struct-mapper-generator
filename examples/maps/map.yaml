@@ -1,0 +1,4 @@
+version: "1"
+mappings:
+  - source: caster-generator/examples/maps.Source
+    target: caster-generator/examples/maps.Target

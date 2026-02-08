@@ -765,6 +765,14 @@ func (g *Generator) applyPointerDerefStrategy(
 	// Keep the original pointer expression for the nil-check; use a dereferenced
 	// expression for the actual assignment.
 	assignment.NilDefault = g.zeroValue(pair.TargetType, m.TargetPaths)
+
+	if len(m.TargetPaths) > 0 {
+		ft := g.getFieldTypeInfo(pair.TargetType, m.TargetPaths[0].String())
+		if ft != nil && ft.Kind == analyze.TypeKindStruct {
+			assignment.NilDefault += " /* FIXME: zero value used for nil pointer */"
+		}
+	}
+
 	assignment.NilCheckExpr = assignment.SourceExpr
 	assignment.SourceExpr = "*" + assignment.SourceExpr
 }
@@ -1118,7 +1126,8 @@ func (g *Generator) buildValueConversion(
 		if srcInner != nil && srcInner.Kind == analyze.TypeKindStruct {
 			casterName := g.nestedFunctionName(srcInner, tgtType)
 
-			return fmt.Sprintf("%s(*%s)", casterName, srcExpr)
+			return fmt.Sprintf("func() %s { if %s == nil { return %s{} /* FIXME: zero value used for nil pointer */ }; return %s(*%s) }()",
+				tgtTypeStr, srcExpr, tgtTypeStr, casterName, srcExpr)
 		}
 	}
 

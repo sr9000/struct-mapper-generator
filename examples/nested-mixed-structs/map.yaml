@@ -1,16 +1,16 @@
 version: 1
 
 types:
-  - from: caster-generator/examples/nested-mixed.APIOrder
-    to: caster-generator/examples/nested-mixed.DomainOrder
+  - from: caster-generator/examples/nested-mixed-structs.APIOrder
+    to: caster-generator/examples/nested-mixed-structs.DomainOrder
     fields:
       - target: ID
         source: ID
       - target: Lines
         source: Items
         hint: dive
-  - from: caster-generator/examples/nested-mixed.APIItem
-    to: caster-generator/examples/nested-mixed.DomainLine
+  - from: caster-generator/examples/nested-mixed-structs.APIItem
+    to: caster-generator/examples/nested-mixed-structs.DomainLine
     fields:
       - target: SKU
         source: SKU

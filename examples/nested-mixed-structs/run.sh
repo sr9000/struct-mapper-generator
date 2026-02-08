@@ -29,9 +29,9 @@ clean_dir "$out_dir"
 stage_start "Initial Suggest" "Generate base mapping for order types"
 
 run_suggest "${stages_dir}/stage1.yaml" \
-  -pkg ./examples/nested-mixed \
-  -from "caster-generator/examples/nested-mixed.APIOrder" \
-  -to "caster-generator/examples/nested-mixed.DomainOrder"
+  -pkg ./examples/nested-mixed-structs \
+  -from "caster-generator/examples/nested-mixed-structs.APIOrder" \
+  -to "caster-generator/examples/nested-mixed-structs.DomainOrder"
 
 show_yaml_with_comments "${stages_dir}/stage1.yaml" \
   "Initial mapping - notice Items -> Lines needs dive hint"
@@ -54,8 +54,8 @@ version: "1"
 
 # Using 'types' format which the generator supports well for this example
 types:
-  - from: caster-generator/examples/nested-mixed.APIOrder
-    to: caster-generator/examples/nested-mixed.DomainOrder
+  - from: caster-generator/examples/nested-mixed-structs.APIOrder
+    to: caster-generator/examples/nested-mixed-structs.DomainOrder
     fields:
       - source: ID
         target: ID
@@ -63,8 +63,8 @@ types:
         target: Lines
         hint: dive  # Enable element-wise conversion for []*APIItem -> []*DomainLine
 
-  - from: caster-generator/examples/nested-mixed.APIItem
-    to: caster-generator/examples/nested-mixed.DomainLine
+  - from: caster-generator/examples/nested-mixed-structs.APIItem
+    to: caster-generator/examples/nested-mixed-structs.DomainLine
     fields:
       - source: SKU
         target: SKU
@@ -85,7 +85,7 @@ prompt_continue
 stage_start "Suggest Improve" "Validate mapping with suggest"
 
 run_suggest_improve "${stages_dir}/stage2.yaml" "${stages_dir}/stage3.yaml" \
-  -pkg ./examples/nested-mixed
+  -pkg ./examples/nested-mixed-structs
 
 show_yaml_with_comments "${stages_dir}/stage3.yaml" \
   "Validated mapping"
@@ -99,7 +99,7 @@ stage_start "Generate Code" "Generate caster functions"
 
 # Use stage2.yaml which has the dive hint preserved
 run_gen "${stages_dir}/stage2.yaml" "$out_dir" \
-  -pkg ./examples/nested-mixed \
+  -pkg ./examples/nested-mixed-structs \
   -package casters
 
 info "Generated files:"
@@ -112,7 +112,7 @@ prompt_continue
 # ============================================================================
 stage_start "Compile Check" "Verify generated code compiles"
 
-test_compile ./examples/nested-mixed
+test_compile ./examples/nested-mixed-structs
 
 # ============================================================================
 # Done

@@ -254,13 +254,3 @@ The scenario scripts then:
 
 - Main [README.md](../README.md) for CLI reference
 - [STRUCTURE.md](../STRUCTURE.md) for project structure
-
-## Known Issues
-
-Some generated code may have compilation issues:
-
-1. **Duplicate transform functions**: When transforms are defined in both YAML and transforms.go, the generator may inline them causing redeclaration errors. Workaround: Remove duplicates from generated files or transforms.go.
-
-2. **Requires parameter mismatch**: When using `requires` section, the generated caster may have different signature than expected. This is a generator bug being tracked.
-
-3. **Multi-mapping dive hints**: Complex nested struct mappings with `hint: dive` may not generate code. The mapping YAML structure is demonstrated but generation support is incomplete.

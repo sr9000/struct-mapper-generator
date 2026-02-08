@@ -24,7 +24,7 @@ build:
 
 ## lint: Run golangci-lint with auto-fix (excludes examples/)
 lint:
-	@DIRS=$$(ls -la | awk '/^d/ && $$NF !~ /^\./ && $$NF !~ /examples/ {print "./" $$NF "/..."}'); \
+	@DIRS=$$(ls -la | awk '/^d/ && $$NF !~ /^\./ && $$NF !~ /examples/ && $$NF !~ /step-by-step/ {print "./" $$NF "/..."}'); \
 	golangci-lint run --fix $$DIRS
 
 ## test: Run all tests with race detection

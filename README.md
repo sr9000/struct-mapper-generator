@@ -2,6 +2,16 @@
 
 **A magic tool that writes boring Go code for you!**
 
+## 📋 Table of Contents
+- [What Does It Do?](#-what-does-it-do)
+- [Key Features](#-key-features)
+- [Installation](#-installation)
+- [Quick Start](#-quick-start-5-steps)
+- [Step-by-Step Tutorial](#-step-by-step-tutorial)
+- [Examples](#-examples-directory)
+- [CLI Reference](#-cli-reference)
+- [Advanced Usage](#-advanced-usage--configuration)
+
 ## 🤔 What Does It Do?
 
 Imagine you have two toy boxes:
@@ -16,6 +26,32 @@ In programmer talk: it generates code to convert one Go struct to another. It ha
 - **Pointers** (auto-dereferencing, nil checks)
 - **Recursive types** (safe cycle detection)
 - **Type mismatch** (via custom transform functions)
+
+## ✨ Key Features
+
+- 🚀 **Zero Runtime Overhead**: Generates pure, type-safe Go code. No reflection at runtime!
+- 🛡️ **Type Safety**: Compile-time checks ensure your data maps correctly.
+- 🔄 **Recursive Types**: Handles complex, self-referencing structures without infinite loops.
+- 🧩 **Flexible Mapping**: Map nested structs, collections (maps/slices), and pointers effortlessly.
+- 🔌 **Extensible**: Plug in custom transformation functions for complex logic.
+
+---
+
+## 📦 Installation
+
+### Option 1: Go Install (Recommended)
+
+```bash
+go install github.com/sr9000/caster-generator/cmd/caster-generator@latest
+```
+
+### Option 2: Build from Source
+
+```bash
+git clone https://github.com/sr9000/caster-generator.git
+cd caster-generator
+make build
+```
 
 ---
 
@@ -58,6 +94,22 @@ This writes the boring code for you! 🎉
 ```
 
 This makes sure nothing is broken!
+
+---
+
+## 📚 Step-by-Step Tutorial
+
+Want to master the tool? Check out our comprehensive **[Step-by-Step Guide](step-by-step/GUIDE.md)**!
+
+The guide takes you from zero to hero with 18 meaningful lessons, covering:
+
+- 🔍 **Basics**: Analyzing packages and getting smart suggestions
+- 🚀 **Core Features**: Field renames, ignores, and auto-matching
+- 🧠 **Advanced Logic**: Custom transforms, pointer handling, and recursion
+- 🛠️ **Power User**: Virtual types, context passing, and CI/CD integration
+
+[**Start the Tutorial →**](step-by-step/GUIDE.md)
+
 ---
 
 ## 🎓 Examples Directory

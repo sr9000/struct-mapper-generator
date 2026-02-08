@@ -14,6 +14,11 @@ Focuses on decomposing the monolithic resolver and suggestion export logic.
 - **Detailed Plan**: [internal/plan/REFACTOR.md](internal/plan/REFACTOR.md)
 - **Key Goals**: Extract AutoMatch, Strategy Selection, and Virtual Type management into focused components.
 
+### 3. `internal/gen`
+Focuses on decomposing the monolithic generator and template data preparation logic.
+- **Detailed Plan**: [internal/gen/REFACTOR.md](internal/gen/REFACTOR.md)
+- **Key Goals**: Separate template data building, strategy application, and collection loop generation.
+
 ## Overall Objectives
 
 - **Maintainability**: Reduce the size of monolithic files (`resolver.go`, `schema.go`).

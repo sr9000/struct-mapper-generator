@@ -44,9 +44,9 @@ prompt_continue
 stage_start "Initial Suggest" "Generate mapping for Node -> NodeDTO"
 
 run_suggest "${stages_dir}/stage2.yaml" \
-  -pkg ./examples/recursive \
-  -from "caster-generator/examples/recursive.Node" \
-  -to "caster-generator/examples/recursive.NodeDTO"
+  -pkg ./examples/recursive-struct \
+  -from "caster-generator/examples/recursive-struct.Node" \
+  -to "caster-generator/examples/recursive-struct.NodeDTO"
 
 show_yaml_with_comments "${stages_dir}/stage2.yaml" \
   "Mapping for recursive type - Next field should map to itself"
@@ -66,8 +66,8 @@ cat > "${stages_dir}/stage3.yaml" << 'EOF'
 version: "1"
 
 mappings:
-  - source: caster-generator/examples/recursive.Node
-    target: caster-generator/examples/recursive.NodeDTO
+  - source: caster-generator/examples/recursive-struct.Node
+    target: caster-generator/examples/recursive-struct.NodeDTO
     121:
       Value: Value
       Next: Next    # Recursive: *Node -> *NodeDTO
@@ -84,7 +84,7 @@ prompt_continue
 stage_start "Suggest Improve" "Validate mapping"
 
 run_suggest_improve "${stages_dir}/stage3.yaml" "${stages_dir}/stage4.yaml" \
-  -pkg ./examples/recursive
+  -pkg ./examples/recursive-struct
 
 show_yaml_with_comments "${stages_dir}/stage4.yaml" \
   "Validated mapping"
@@ -97,7 +97,7 @@ prompt_continue
 stage_start "Generate Code" "Generate recursive caster"
 
 run_gen "${stages_dir}/stage4.yaml" "$out_dir" \
-  -pkg ./examples/recursive \
+  -pkg ./examples/recursive-struct \
   -package casters
 
 info "Generated files:"
@@ -117,7 +117,7 @@ prompt_continue
 # ============================================================================
 stage_start "Compile Check" "Verify recursive caster compiles"
 
-test_compile ./examples/recursive
+test_compile ./examples/recursive-struct
 
 # ============================================================================
 # Done

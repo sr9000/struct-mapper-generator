@@ -5,5 +5,5 @@ import (
 )
 
 func TestGenerate_NestedMixedExample_Compiles(t *testing.T) {
-	runExampleIntegrationTest(t, "nested-mixed")
+	runExampleIntegrationTest(t, "nested-mixed-structs")
 }

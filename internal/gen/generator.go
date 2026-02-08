@@ -1097,7 +1097,7 @@ func (g *Generator) buildValueConversion(
 		return fmt.Sprintf("%s(%s)", casterName, srcExpr)
 	}
 
-	// Handle pointer-to-struct element conversion
+	// Handle pointer-to-struct element conversion (both pointers)
 	if srcType.Kind == analyze.TypeKindPointer && tgtType.Kind == analyze.TypeKindPointer {
 		srcInner := srcType.ElemType
 		tgtInner := tgtType.ElemType
@@ -1108,6 +1108,28 @@ func (g *Generator) buildValueConversion(
 
 			return fmt.Sprintf("func() %s { if %s == nil { return nil }; v := %s(*%s); return &v }()",
 				tgtTypeStr, srcExpr, casterName, srcExpr)
+		}
+	}
+
+	// Handle pointer-to-struct -> struct element conversion (dereference + convert)
+	if srcType.Kind == analyze.TypeKindPointer && tgtType.Kind == analyze.TypeKindStruct {
+		srcInner := srcType.ElemType
+
+		if srcInner != nil && srcInner.Kind == analyze.TypeKindStruct {
+			casterName := g.nestedFunctionName(srcInner, tgtType)
+
+			return fmt.Sprintf("%s(*%s)", casterName, srcExpr)
+		}
+	}
+
+	// Handle struct -> pointer-to-struct element conversion (convert + reference)
+	if srcType.Kind == analyze.TypeKindStruct && tgtType.Kind == analyze.TypeKindPointer {
+		tgtInner := tgtType.ElemType
+
+		if tgtInner != nil && tgtInner.Kind == analyze.TypeKindStruct {
+			casterName := g.nestedFunctionName(srcType, tgtInner)
+
+			return fmt.Sprintf("func() %s { v := %s(%s); return &v }()", tgtTypeStr, casterName, srcExpr)
 		}
 	}
 

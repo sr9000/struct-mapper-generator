@@ -27,6 +27,9 @@ type GeneratorConfig struct {
 	GenerateComments bool
 	// IncludeUnmappedTODOs generates TODO comments for unmapped fields.
 	IncludeUnmappedTODOs bool
+	// DeclaredTransforms is a set of transform names declared in the mapping file.
+	// Transforms in this set won't have stubs generated.
+	DeclaredTransforms map[string]bool
 }
 
 // DefaultGeneratorConfig returns the default generator configuration.
@@ -1338,6 +1341,11 @@ func (g *Generator) identifyMissingTransforms(
 
 		// If transform contains a dot, it's likely a package call (or method)
 		if strings.Contains(m.Transform, ".") {
+			continue
+		}
+
+		// If transform is declared in the mapping file, skip it
+		if g.config.DeclaredTransforms != nil && g.config.DeclaredTransforms[m.Transform] {
 			continue
 		}
 

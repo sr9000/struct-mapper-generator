@@ -465,11 +465,18 @@ Options:
 	}
 
 	// Generate code
+	// Build set of declared transforms from mapping file
+	declaredTransforms := make(map[string]bool)
+	for _, t := range mappingDef.Transforms {
+		declaredTransforms[t.Name] = true
+	}
+
 	generator := gen.NewGenerator(gen.GeneratorConfig{
 		PackageName:          *pkgName,
 		OutputDir:            *outDir,
 		GenerateComments:     true,
 		IncludeUnmappedTODOs: true,
+		DeclaredTransforms:   declaredTransforms,
 	})
 
 	files, err := generator.Generate(resolvedPlan)

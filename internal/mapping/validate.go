@@ -165,12 +165,16 @@ func validateFieldMapping(
 		res.AddError("missing_transform", card.String()+" mapping requires transform", typePairStr, "")
 	}
 
-	// A referenced transform must exist in the registry.
+	// A referenced transform must exist in the registry, unless it's a simple name
+	// (without package prefix) which will have a stub generated.
 	if fm.Transform != "" {
 		if _, ok := knownTransforms[fm.Transform]; !ok {
-			res.AddError("unknown_transform",
-				fmt.Sprintf("referenced transform %q is not declared in transforms", fm.Transform),
-				typePairStr, "")
+			// Allow simple transform names without package prefix - stubs will be generated
+			if strings.Contains(fm.Transform, ".") {
+				res.AddError("unknown_transform",
+					fmt.Sprintf("referenced transform %q is not declared in transforms", fm.Transform),
+					typePairStr, "")
+			}
 		}
 	}
 

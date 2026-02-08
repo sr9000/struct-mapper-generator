@@ -986,14 +986,16 @@ func (g *Generator) buildExtraArgsForNestedCall(extra []mapping.ExtraVal) string
 	}
 
 	var args []string
+
 	for _, ev := range extra {
-		// If the extra has a target definition, use "out.<target>"
-		if ev.Def.Target != "" {
+		switch {
+		case ev.Def.Target != "":
+			// If the extra has a target definition, use "out.<target>"
 			args = append(args, "out."+ev.Def.Target)
-		} else if ev.Def.Source != "" {
+		case ev.Def.Source != "":
 			// If the extra has a source definition, use "in.<source>"
 			args = append(args, "in."+ev.Def.Source)
-		} else {
+		default:
 			// Just use the name directly (for requires args passed through)
 			args = append(args, ev.Name)
 		}
@@ -1148,6 +1150,7 @@ func (g *Generator) buildValueConversionWithExtra(
 		if srcInner != nil && tgtInner != nil &&
 			srcInner.Kind == analyze.TypeKindStruct && tgtInner.Kind == analyze.TypeKindStruct {
 			casterName := g.nestedFunctionName(srcInner, tgtInner)
+
 			casterCall := casterName + "(*" + srcExpr + ")"
 			if extraArgs != "" {
 				casterCall = fmt.Sprintf("%s(*%s, %s)", casterName, srcExpr, extraArgs)
@@ -1164,6 +1167,7 @@ func (g *Generator) buildValueConversionWithExtra(
 
 		if srcInner != nil && srcInner.Kind == analyze.TypeKindStruct {
 			casterName := g.nestedFunctionName(srcInner, tgtType)
+
 			casterCall := fmt.Sprintf("%s(*%s)", casterName, srcExpr)
 			if extraArgs != "" {
 				casterCall = fmt.Sprintf("%s(*%s, %s)", casterName, srcExpr, extraArgs)
@@ -1180,6 +1184,7 @@ func (g *Generator) buildValueConversionWithExtra(
 
 		if tgtInner != nil && tgtInner.Kind == analyze.TypeKindStruct {
 			casterName := g.nestedFunctionName(srcType, tgtInner)
+
 			casterCall := fmt.Sprintf("%s(%s)", casterName, srcExpr)
 			if extraArgs != "" {
 				casterCall = fmt.Sprintf("%s(%s, %s)", casterName, srcExpr, extraArgs)

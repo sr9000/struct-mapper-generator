@@ -91,6 +91,7 @@ func Validate(mf *MappingFile, graph *analyze.TypeGraph) *diagnostic.Diagnostics
 	return res
 }
 
+//nolint:gocyclo
 func validateFieldMapping(
 	res *diagnostic.Diagnostics,
 	typePairStr string,
@@ -134,6 +135,7 @@ func validateFieldMapping(
 
 				// Check if this source path starts with a required argument
 				isReq := false
+
 				if parent != nil {
 					// extract first segment of path (simple split, as path parsing is done later)
 					parts := strings.Split(s.Path, ".")

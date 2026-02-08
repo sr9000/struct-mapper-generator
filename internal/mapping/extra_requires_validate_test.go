@@ -55,6 +55,7 @@ func TestValidate_ExtraRequiresMustBeDeclared(t *testing.T) {
 		require.False(t, res.IsValid())
 
 		found := false
+
 		for _, e := range res.Errors {
 			if e.TypePair == "src.Src->dst.Dst" &&
 				e.Message == "extra \"ctx\" references an undeclared requires arg; add it under requires: or rename" {
@@ -62,6 +63,7 @@ func TestValidate_ExtraRequiresMustBeDeclared(t *testing.T) {
 				break
 			}
 		}
+
 		require.True(t, found, "expected undeclared requires error, got: %#v", res.Errors)
 	})
 

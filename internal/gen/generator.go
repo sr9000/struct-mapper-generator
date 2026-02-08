@@ -986,7 +986,6 @@ func (g *Generator) generateCollectionLoop(
 	// Handle Slices and Arrays
 	if (srcType.Kind == analyze.TypeKindSlice || srcType.Kind == analyze.TypeKindArray) &&
 		(tgtType.Kind == analyze.TypeKindSlice || tgtType.Kind == analyze.TypeKindArray) {
-
 		idxVar := fmt.Sprintf("i_%d", depth)
 		srcElem := g.getSliceElementType(srcType)
 		tgtElem := g.getSliceElementType(tgtType)
@@ -1009,7 +1008,7 @@ func (g *Generator) generateCollectionLoop(
 		srcItem := fmt.Sprintf("%s[%s]", srcField, idxVar)
 		tgtItem := fmt.Sprintf("%s[%s]", tgtField, idxVar)
 
-		body := ""
+		var body string
 
 		// Recursion or conversion
 		if g.isCollection(srcElem) && g.isCollection(tgtElem) {
@@ -1050,7 +1049,8 @@ func (g *Generator) generateCollectionLoop(
 
 		tgtItem := fmt.Sprintf("%s[%s]", tgtField, keyExpr)
 
-		body := ""
+		var body string
+
 		if g.isCollection(srcVal) && g.isCollection(tgtVal) {
 			// For nested collections, we might need a block not just a string statement
 			body = g.generateCollectionLoop(valVar, tgtItem, srcVal, tgtVal, imports, depth+1)
@@ -1583,6 +1583,7 @@ func (g *Generator) typesConvertible(a, b *analyze.TypeInfo) bool {
 	if a.Kind == analyze.TypeKindAlias {
 		return g.typesConvertible(a.Underlying, b)
 	}
+
 	if b.Kind == analyze.TypeKindAlias {
 		return g.typesConvertible(a, b.Underlying)
 	}

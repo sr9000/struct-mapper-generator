@@ -258,6 +258,87 @@ fields:
     transform: DollarsToCents
 ```
 
+#### Passing Extra Args to Transforms
+
+Transforms can receive additional arguments beyond the source field values using `extra`:
+
+```yaml
+fields:
+  # Transform with extra source field
+  - source: Amount
+    target: FormattedAmount
+    transform: FormatCurrency
+    extra:
+      - name: Currency
+        def:
+          source: CurrencyCode  # Pass in.CurrencyCode as extra arg
+
+  # Transform with extra from already-assigned target field
+  - source: Value
+    target: AdjustedValue
+    transform: ApplyDiscount
+    extra:
+      - name: DiscountRate
+        def:
+          target: Discount  # Pass out.Discount as extra arg
+
+  # Transform with extra from requires (parent context)
+  - source: LocalPrice
+    target: ConvertedPrice
+    transform: ConvertToUSD
+    extra:
+      - name: ExchangeRate  # Passed from requires, used verbatim
+```
+
+**Generated code examples:**
+
+```go
+// Simple transform (no extra)
+out.PriceCents = DollarsToCents(in.Price)
+
+// Transform with extra source field
+out.FormattedAmount = FormatCurrency(in.Amount, in.CurrencyCode)
+
+// Transform with extra target field (assigned earlier)
+out.AdjustedValue = ApplyDiscount(in.Value, out.Discount)
+
+// Transform with requires arg
+out.ConvertedPrice = ConvertToUSD(in.LocalPrice, ExchangeRate)
+```
+
+**Transform function signatures:**
+
+```go
+// FormatCurrency takes the amount and currency code
+func FormatCurrency(amount float64, currency string) string
+
+// ApplyDiscount takes the value and discount rate
+func ApplyDiscount(value int64, discountRate float64) int64
+
+// ConvertToUSD takes the local price and exchange rate
+func ConvertToUSD(localPrice float64, exchangeRate float64) float64
+```
+
+#### Multi-Source Transforms with Extra
+
+Combine multiple source fields AND extra args:
+
+```yaml
+fields:
+  - source: [FirstName, LastName]
+    target: FullName
+    transform: FormatName
+    extra:
+      - name: Prefix
+        def:
+          source: Title  # e.g., "Dr.", "Mr.", "Ms."
+```
+
+**Generated:**
+```go
+out.FullName = FormatName(in.FirstName, in.LastName, in.Title)
+```
+
 #### Transform Patterns
 
 | Pattern            | Example Source  | Example Target | Transform        |

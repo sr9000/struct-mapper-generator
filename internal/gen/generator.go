@@ -970,7 +970,33 @@ func (g *Generator) buildSliceMapping(
 			m.SourcePaths[0], m.TargetPaths[0])
 	}
 
-	return g.generateCollectionLoop(srcField, tgtField, srcType, tgtType, imports, 0)
+	// Build extra args string from m.Extra
+	extraArgs := g.buildExtraArgsForNestedCall(m.Extra)
+
+	return g.generateCollectionLoop(srcField, tgtField, srcType, tgtType, imports, 0, extraArgs)
+}
+
+// buildExtraArgsForNestedCall builds the extra arguments string for a nested caster call.
+func (g *Generator) buildExtraArgsForNestedCall(extra []mapping.ExtraVal) string {
+	if len(extra) == 0 {
+		return ""
+	}
+
+	var args []string
+	for _, ev := range extra {
+		// If the extra has a target definition, use "out.<target>"
+		if ev.Def.Target != "" {
+			args = append(args, "out."+ev.Def.Target)
+		} else if ev.Def.Source != "" {
+			// If the extra has a source definition, use "in.<source>"
+			args = append(args, "in."+ev.Def.Source)
+		} else {
+			// Just use the name directly (for requires args passed through)
+			args = append(args, ev.Name)
+		}
+	}
+
+	return strings.Join(args, ", ")
 }
 
 func (g *Generator) generateCollectionLoop(
@@ -978,6 +1004,7 @@ func (g *Generator) generateCollectionLoop(
 	srcType, tgtType *analyze.TypeInfo,
 	imports map[string]importSpec,
 	depth int,
+	extraArgs string,
 ) string {
 	if srcType == nil || tgtType == nil {
 		return "// TODO: nil types in loop generation"
@@ -1012,11 +1039,11 @@ func (g *Generator) generateCollectionLoop(
 
 		// Recursion or conversion
 		if g.isCollection(srcElem) && g.isCollection(tgtElem) {
-			body = g.generateCollectionLoop(srcItem, tgtItem, srcElem, tgtElem, imports, depth+1)
+			body = g.generateCollectionLoop(srcItem, tgtItem, srcElem, tgtElem, imports, depth+1, extraArgs)
 		} else {
 			// Leaf conversion
 			tgtElemStr := g.typeRefString(tgtElem, imports)
-			expr := g.buildValueConversion(srcItem, srcElem, tgtElem, tgtElemStr)
+			expr := g.buildValueConversionWithExtra(srcItem, srcElem, tgtElem, tgtElemStr, extraArgs)
 			body = fmt.Sprintf("%s = %s", tgtItem, expr)
 		}
 
@@ -1053,10 +1080,10 @@ func (g *Generator) generateCollectionLoop(
 
 		if g.isCollection(srcVal) && g.isCollection(tgtVal) {
 			// For nested collections, we might need a block not just a string statement
-			body = g.generateCollectionLoop(valVar, tgtItem, srcVal, tgtVal, imports, depth+1)
+			body = g.generateCollectionLoop(valVar, tgtItem, srcVal, tgtVal, imports, depth+1, extraArgs)
 		} else {
 			tgtValStr := g.typeRefString(tgtVal, imports)
-			expr := g.buildValueConversion(valVar, srcVal, tgtVal, tgtValStr)
+			expr := g.buildValueConversionWithExtra(valVar, srcVal, tgtVal, tgtValStr, extraArgs)
 			body = fmt.Sprintf("%s = %s", tgtItem, expr)
 		}
 
@@ -1084,6 +1111,83 @@ func (g *Generator) getSliceElementType(t *analyze.TypeInfo) *analyze.TypeInfo {
 	}
 
 	return nil
+}
+
+// buildValueConversionWithExtra builds a value conversion expression, appending extra args for nested caster calls.
+func (g *Generator) buildValueConversionWithExtra(
+	srcExpr string,
+	srcType, tgtType *analyze.TypeInfo,
+	tgtTypeStr string,
+	extraArgs string,
+) string {
+	if g.typesIdentical(srcType, tgtType) {
+		return srcExpr
+	}
+
+	if g.typesConvertible(srcType, tgtType) {
+		return fmt.Sprintf("%s(%s)", tgtTypeStr, srcExpr)
+	}
+
+	if srcType.Kind == analyze.TypeKindStruct && tgtType.Kind == analyze.TypeKindStruct {
+		casterName := g.nestedFunctionName(srcType, tgtType)
+		if extraArgs != "" {
+			return fmt.Sprintf("%s(%s, %s)", casterName, srcExpr, extraArgs)
+		}
+
+		return fmt.Sprintf("%s(%s)", casterName, srcExpr)
+	}
+
+	// Handle pointer-to-struct element conversion (both pointers)
+	if srcType.Kind == analyze.TypeKindPointer && tgtType.Kind == analyze.TypeKindPointer {
+		srcInner := srcType.ElemType
+		tgtInner := tgtType.ElemType
+
+		if srcInner != nil && tgtInner != nil &&
+			srcInner.Kind == analyze.TypeKindStruct && tgtInner.Kind == analyze.TypeKindStruct {
+			casterName := g.nestedFunctionName(srcInner, tgtInner)
+			casterCall := casterName + "(*" + srcExpr + ")"
+			if extraArgs != "" {
+				casterCall = fmt.Sprintf("%s(*%s, %s)", casterName, srcExpr, extraArgs)
+			}
+
+			return fmt.Sprintf("func() %s { if %s == nil { return nil }; v := %s; return &v }()",
+				tgtTypeStr, srcExpr, casterCall)
+		}
+	}
+
+	// Handle pointer-to-struct -> struct element conversion (dereference + convert)
+	if srcType.Kind == analyze.TypeKindPointer && tgtType.Kind == analyze.TypeKindStruct {
+		srcInner := srcType.ElemType
+
+		if srcInner != nil && srcInner.Kind == analyze.TypeKindStruct {
+			casterName := g.nestedFunctionName(srcInner, tgtType)
+			casterCall := fmt.Sprintf("%s(*%s)", casterName, srcExpr)
+			if extraArgs != "" {
+				casterCall = fmt.Sprintf("%s(*%s, %s)", casterName, srcExpr, extraArgs)
+			}
+
+			return fmt.Sprintf("func() %s { if %s == nil { return %s{} /* FIXME: zero value used for nil pointer */ }; return %s }()",
+				tgtTypeStr, srcExpr, tgtTypeStr, casterCall)
+		}
+	}
+
+	// Handle struct -> pointer-to-struct element conversion (convert + reference)
+	if srcType.Kind == analyze.TypeKindStruct && tgtType.Kind == analyze.TypeKindPointer {
+		tgtInner := tgtType.ElemType
+
+		if tgtInner != nil && tgtInner.Kind == analyze.TypeKindStruct {
+			casterName := g.nestedFunctionName(srcType, tgtInner)
+			casterCall := fmt.Sprintf("%s(%s)", casterName, srcExpr)
+			if extraArgs != "" {
+				casterCall = fmt.Sprintf("%s(%s, %s)", casterName, srcExpr, extraArgs)
+			}
+
+			return fmt.Sprintf("func() %s { v := %s; return &v }()", tgtTypeStr, casterCall)
+		}
+	}
+
+	// Fallback - hope for the best
+	return srcExpr
 }
 
 func (g *Generator) buildValueConversion(
@@ -1167,7 +1271,10 @@ func (g *Generator) buildMapMapping(
 			m.SourcePaths[0], m.TargetPaths[0])
 	}
 
-	return g.generateCollectionLoop(srcField, tgtField, srcType, tgtType, imports, 0)
+	// Build extra args string from m.Extra
+	extraArgs := g.buildExtraArgsForNestedCall(m.Extra)
+
+	return g.generateCollectionLoop(srcField, tgtField, srcType, tgtType, imports, 0, extraArgs)
 }
 
 func (g *Generator) getMapKeyType(t *analyze.TypeInfo) *analyze.TypeInfo {

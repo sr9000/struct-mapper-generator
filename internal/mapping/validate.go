@@ -132,8 +132,25 @@ func validateFieldMapping(
 					continue
 				}
 
-				if err := validatePathAgainstType(s.Path, srcT); err != nil {
-					res.AddError("invalid_source_path", fmt.Sprintf("invalid source path: %v", err), typePairStr, s.Path)
+				// Check if this source path starts with a required argument
+				isReq := false
+				if parent != nil {
+					// extract first segment of path (simple split, as path parsing is done later)
+					parts := strings.Split(s.Path, ".")
+					if len(parts) > 0 {
+						for _, req := range parent.Requires {
+							if req.Name == parts[0] {
+								isReq = true
+								break
+							}
+						}
+					}
+				}
+
+				if !isReq {
+					if err := validatePathAgainstType(s.Path, srcT); err != nil {
+						res.AddError("invalid_source_path", fmt.Sprintf("invalid source path: %v", err), typePairStr, s.Path)
+					}
 				}
 
 				if !s.Hint.IsValid() {
@@ -176,9 +193,15 @@ func validateFieldMapping(
 			}
 
 			if !declared {
-				res.AddError("undeclared_extra_arg",
-					fmt.Sprintf("extra %q references an undeclared requires arg; add it under requires: or rename", ev.Name),
-					typePairStr, "")
+				// Relax validation: if the extra arg has a definition (source or target),
+				// it's creating a new value, not just forwarding a required arg.
+				isDefinition := ev.Def.Source != "" || ev.Def.Target != ""
+
+				if !isDefinition {
+					res.AddError("undeclared_extra_arg",
+						fmt.Sprintf("extra %q references an undeclared requires arg; add it under requires: or rename", ev.Name),
+						typePairStr, "")
+				}
 			}
 		}
 

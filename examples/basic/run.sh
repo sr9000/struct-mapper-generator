@@ -65,11 +65,11 @@ version: "1"
 # Transform function declarations
 # These need to be implemented in your code
 transforms:
-  - name: Int64ToUint
+  - name: basic.Int64ToUint
     signature: "func(v int64) uint"
-  - name: Float64ToCents
+  - name: basic.Float64ToCents
     signature: "func(dollars float64) int64"
-  - name: StringToUint
+  - name: basic.StringToUint
     signature: "func(s string) uint"
 
 mappings:
@@ -80,7 +80,7 @@ mappings:
       # ID needs type conversion: int64 -> uint
       - source: ID
         target: UserID
-        transform: Int64ToUint
+        transform: basic.Int64ToUint
       # FullName -> Name is a simple rename
       - source: FullName
         target: Name
@@ -101,15 +101,15 @@ mappings:
       # OrderID (string) -> ID (uint) needs transform
       - source: OrderID
         target: ID
-        transform: StringToUint
+        transform: basic.StringToUint
       # CustomerID: int64 -> uint needs transform
       - source: CustomerID
         target: CustomerID
-        transform: Int64ToUint
+        transform: basic.Int64ToUint
       # Amount (float64 dollars) -> TotalCents (int64 cents)
       - source: Amount
         target: TotalCents
-        transform: Float64ToCents
+        transform: basic.Float64ToCents
     auto:
       - source: Status
         target: Status

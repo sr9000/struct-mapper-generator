@@ -37,7 +37,7 @@ func ExportSuggestions(plan *ResolvedMappingPlan) (*mapping.MappingFile, error) 
 	mf := &mapping.MappingFile{
 		Version:      "1",
 		TypeMappings: []mapping.TypeMapping{},
-		Transforms:   []mapping.TransformDef{},
+		Transforms:   plan.OriginalTransforms, // Preserve original transforms
 	}
 
 	// Track already exported type pairs to avoid duplicates

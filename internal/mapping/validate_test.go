@@ -459,6 +459,7 @@ transforms: []
 }
 
 func TestValidate_NeedsTransformButTransformNonExistent(t *testing.T) {
+	// Test that package-prefixed transforms must be declared
 	yaml := `
 mappings:
   - source: store.Order
@@ -466,7 +467,7 @@ mappings:
     fields:
       - target: ID
         source: OrderID
-        transform: NonExistentTransform
+        transform: some_pkg.NonExistentTransform
 transforms: []
  `
 	mf, err := Parse([]byte(yaml))
@@ -478,7 +479,29 @@ transforms: []
 	assert.False(t, result.IsValid())
 	valErr := result.Error()
 	require.Error(t, valErr)
-	assert.Contains(t, valErr.Error(), "NonExistentTransform")
+	assert.Contains(t, valErr.Error(), "some_pkg.NonExistentTransform")
+}
+
+func TestValidate_SimpleTransformAllowedWithoutDeclaration(t *testing.T) {
+	// Test that simple transform names (without package prefix) are allowed without declaration
+	// because stubs will be generated for them
+	yaml := `
+mappings:
+  - source: store.Order
+    target: warehouse.Order
+    fields:
+      - target: ID
+        source: OrderID
+        transform: SimpleTransform
+transforms: []
+ `
+	mf, err := Parse([]byte(yaml))
+	require.NoError(t, err)
+
+	graph := buildTestTypeGraph()
+	result := Validate(mf, graph)
+
+	assert.True(t, result.IsValid(), "simple transform names should be allowed, got errors: %v", result.Errors)
 }
 
 func TestValidate_KnownTransformReferenceOK(t *testing.T) {

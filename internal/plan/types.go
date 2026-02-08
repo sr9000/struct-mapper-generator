@@ -17,6 +17,8 @@ type ResolvedMappingPlan struct {
 	TypeGraph *analyze.TypeGraph
 	// Diagnostics contains all warnings and errors from resolution.
 	Diagnostics diagnostic.Diagnostics
+	// OriginalTransforms preserves the transforms from the original mapping file.
+	OriginalTransforms []mapping.TransformDef
 }
 
 // ArgDef represents a function argument definition.

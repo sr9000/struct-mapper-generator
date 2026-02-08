@@ -388,6 +388,131 @@ func TestGenerator_Generate_MissingTransformStubs(t *testing.T) {
 	assert.Contains(t, transformsContent, `panic("transform ID2CustomerID not implemented")`)
 }
 
+func TestGenerator_Generate_MissingTransformStubs_WithRequires(t *testing.T) {
+	// Test that transform signatures inherit types from 'requires' arguments
+	srcType := &analyze.TypeInfo{
+		ID:   analyze.TypeID{PkgPath: "example/store", Name: "Item"},
+		Kind: analyze.TypeKindStruct,
+		Fields: []analyze.FieldInfo{
+			{Name: "Name", Exported: true, Type: &analyze.TypeInfo{
+				ID: analyze.TypeID{Name: "string"}, Kind: analyze.TypeKindBasic,
+			}},
+		},
+	}
+
+	tgtType := &analyze.TypeInfo{
+		ID:   analyze.TypeID{PkgPath: "example/warehouse", Name: "LineItem"},
+		Kind: analyze.TypeKindStruct,
+		Fields: []analyze.FieldInfo{
+			{Name: "Name", Exported: true, Type: &analyze.TypeInfo{
+				ID: analyze.TypeID{Name: "string"}, Kind: analyze.TypeKindBasic,
+			}},
+			{Name: "OrderID", Exported: true, Type: &analyze.TypeInfo{
+				ID: analyze.TypeID{Name: "uint"}, Kind: analyze.TypeKindBasic,
+			}},
+		},
+	}
+
+	resolvedPlan := &plan.ResolvedMappingPlan{
+		TypePairs: []plan.ResolvedTypePair{
+			{
+				SourceType: srcType,
+				TargetType: tgtType,
+				// Requires defines OrderID as uint
+				Requires: []mapping.ArgDef{
+					{Name: "OrderID", Type: "uint"},
+				},
+				Mappings: []plan.ResolvedFieldMapping{
+					{
+						TargetPaths: []mapping.FieldPath{{Segments: []mapping.PathSegment{{Name: "Name"}}}},
+						SourcePaths: []mapping.FieldPath{{Segments: []mapping.PathSegment{{Name: "Name"}}}},
+						Strategy:    plan.StrategyDirectAssign,
+					},
+					{
+						TargetPaths: []mapping.FieldPath{{Segments: []mapping.PathSegment{{Name: "OrderID"}}}},
+						SourcePaths: []mapping.FieldPath{{Segments: []mapping.PathSegment{{Name: "OrderID"}}}},
+						Strategy:    plan.StrategyTransform,
+						Transform:   "PassThroughOrderID",
+						Explanation: "pass through OrderID from requires",
+					},
+				},
+			},
+		},
+	}
+
+	gen := NewGenerator(DefaultGeneratorConfig())
+	files, err := gen.Generate(resolvedPlan)
+
+	require.NoError(t, err)
+	require.Len(t, files, 2) // caster file + missing_transforms.go
+
+	// Second file is the missing transforms
+	transformsContent := string(files[1].Content)
+	// The signature should be `func PassThroughOrderID(v0 uint) uint` - NOT interface{}
+	assert.Contains(t, transformsContent, "func PassThroughOrderID(v0 uint) uint {")
+	assert.NotContains(t, transformsContent, "interface{}")
+}
+
+func TestGenerator_Generate_MissingTransformStubs_WithExtra(t *testing.T) {
+	// Test that transform signatures inherit types from 'extra' arguments when they reference 'requires'
+	srcType := &analyze.TypeInfo{
+		ID:   analyze.TypeID{PkgPath: "example/store", Name: "Item"},
+		Kind: analyze.TypeKindStruct,
+		Fields: []analyze.FieldInfo{
+			{Name: "Price", Exported: true, Type: &analyze.TypeInfo{
+				ID: analyze.TypeID{Name: "float64"}, Kind: analyze.TypeKindBasic,
+			}},
+		},
+	}
+
+	tgtType := &analyze.TypeInfo{
+		ID:   analyze.TypeID{PkgPath: "example/warehouse", Name: "LineItem"},
+		Kind: analyze.TypeKindStruct,
+		Fields: []analyze.FieldInfo{
+			{Name: "PriceInCents", Exported: true, Type: &analyze.TypeInfo{
+				ID: analyze.TypeID{Name: "int64"}, Kind: analyze.TypeKindBasic,
+			}},
+		},
+	}
+
+	resolvedPlan := &plan.ResolvedMappingPlan{
+		TypePairs: []plan.ResolvedTypePair{
+			{
+				SourceType: srcType,
+				TargetType: tgtType,
+				// Requires defines Multiplier as int
+				Requires: []mapping.ArgDef{
+					{Name: "Multiplier", Type: "int"},
+				},
+				Mappings: []plan.ResolvedFieldMapping{
+					{
+						TargetPaths: []mapping.FieldPath{{Segments: []mapping.PathSegment{{Name: "PriceInCents"}}}},
+						SourcePaths: []mapping.FieldPath{{Segments: []mapping.PathSegment{{Name: "Price"}}}},
+						Strategy:    plan.StrategyTransform,
+						Transform:   "PriceToCents",
+						// Extra references the Multiplier required argument
+						Extra: []mapping.ExtraVal{
+							{Name: "Multiplier"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	gen := NewGenerator(DefaultGeneratorConfig())
+	files, err := gen.Generate(resolvedPlan)
+
+	require.NoError(t, err)
+	require.Len(t, files, 2) // caster file + missing_transforms.go
+
+	// Second file is the missing transforms
+	transformsContent := string(files[1].Content)
+	// The signature should have float64 from source Price and int from extra Multiplier
+	assert.Contains(t, transformsContent, "func PriceToCents(v0 float64, v1 int) int64 {")
+	assert.NotContains(t, transformsContent, "interface{}")
+}
+
 func TestTypeRef_String(t *testing.T) {
 	tests := []struct {
 		name     string

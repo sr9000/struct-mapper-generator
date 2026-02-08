@@ -88,9 +88,10 @@ func NewResolver(
 // Resolve runs the full resolution pipeline and returns a ResolvedMappingPlan.
 func (r *Resolver) Resolve() (*ResolvedMappingPlan, error) {
 	plan := &ResolvedMappingPlan{
-		TypePairs:   []ResolvedTypePair{},
-		Diagnostics: diagnostic.Diagnostics{},
-		TypeGraph:   r.graph,
+		TypePairs:          []ResolvedTypePair{},
+		Diagnostics:        diagnostic.Diagnostics{},
+		TypeGraph:          r.graph,
+		OriginalTransforms: r.mappingDef.Transforms,
 	}
 
 	if r.mappingDef == nil {

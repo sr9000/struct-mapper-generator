@@ -27,6 +27,9 @@ type GeneratorConfig struct {
 	GenerateComments bool
 	// IncludeUnmappedTODOs generates TODO comments for unmapped fields.
 	IncludeUnmappedTODOs bool
+	// DeclaredTransforms is a set of transform names declared in the mapping file.
+	// Transforms in this set won't have stubs generated.
+	DeclaredTransforms map[string]bool
 }
 
 // DefaultGeneratorConfig returns the default generator configuration.
@@ -949,11 +952,12 @@ func (g *Generator) wrapConversion(
 	return fmt.Sprintf("%s(%s)", typeStr, expr)
 }
 
-// buildSliceMapping generates the slice mapping code.
-func (g *Generator) buildSliceMapping(
+// buildCollectionMapping is a helper for slice and map mappings.
+func (g *Generator) buildCollectionMapping(
 	m *plan.ResolvedFieldMapping,
 	pair *plan.ResolvedTypePair,
 	imports map[string]importSpec,
+	mappingKind string,
 ) string {
 	if len(m.SourcePaths) == 0 || len(m.TargetPaths) == 0 {
 		return ""
@@ -966,11 +970,48 @@ func (g *Generator) buildSliceMapping(
 	tgtType := g.getFieldTypeInfo(pair.TargetType, m.TargetPaths[0].String())
 
 	if srcType == nil || tgtType == nil {
-		return fmt.Sprintf("// TODO: could not determine types for slice mapping %s -> %s",
-			m.SourcePaths[0], m.TargetPaths[0])
+		return fmt.Sprintf("// TODO: could not determine types for %s mapping %s -> %s",
+			mappingKind, m.SourcePaths[0], m.TargetPaths[0])
 	}
 
-	return g.generateCollectionLoop(srcField, tgtField, srcType, tgtType, imports, 0)
+	// Build extra args string from m.Extra
+	extraArgs := g.buildExtraArgsForNestedCall(m.Extra)
+
+	return g.generateCollectionLoop(srcField, tgtField, srcType, tgtType, imports, 0, extraArgs)
+}
+
+// buildSliceMapping generates the slice mapping code.
+func (g *Generator) buildSliceMapping(
+	m *plan.ResolvedFieldMapping,
+	pair *plan.ResolvedTypePair,
+	imports map[string]importSpec,
+) string {
+	return g.buildCollectionMapping(m, pair, imports, "slice")
+}
+
+// buildExtraArgsForNestedCall builds the extra arguments string for a nested caster call.
+func (g *Generator) buildExtraArgsForNestedCall(extra []mapping.ExtraVal) string {
+	if len(extra) == 0 {
+		return ""
+	}
+
+	var args []string
+
+	for _, ev := range extra {
+		switch {
+		case ev.Def.Target != "":
+			// If the extra has a target definition, use "out.<target>"
+			args = append(args, "out."+ev.Def.Target)
+		case ev.Def.Source != "":
+			// If the extra has a source definition, use "in.<source>"
+			args = append(args, "in."+ev.Def.Source)
+		default:
+			// Just use the name directly (for requires args passed through)
+			args = append(args, ev.Name)
+		}
+	}
+
+	return strings.Join(args, ", ")
 }
 
 func (g *Generator) generateCollectionLoop(
@@ -978,6 +1019,7 @@ func (g *Generator) generateCollectionLoop(
 	srcType, tgtType *analyze.TypeInfo,
 	imports map[string]importSpec,
 	depth int,
+	extraArgs string,
 ) string {
 	if srcType == nil || tgtType == nil {
 		return "// TODO: nil types in loop generation"
@@ -1012,11 +1054,11 @@ func (g *Generator) generateCollectionLoop(
 
 		// Recursion or conversion
 		if g.isCollection(srcElem) && g.isCollection(tgtElem) {
-			body = g.generateCollectionLoop(srcItem, tgtItem, srcElem, tgtElem, imports, depth+1)
+			body = g.generateCollectionLoop(srcItem, tgtItem, srcElem, tgtElem, imports, depth+1, extraArgs)
 		} else {
 			// Leaf conversion
 			tgtElemStr := g.typeRefString(tgtElem, imports)
-			expr := g.buildValueConversion(srcItem, srcElem, tgtElem, tgtElemStr)
+			expr := g.buildValueConversionWithExtra(srcItem, srcElem, tgtElem, tgtElemStr, extraArgs)
 			body = fmt.Sprintf("%s = %s", tgtItem, expr)
 		}
 
@@ -1053,10 +1095,10 @@ func (g *Generator) generateCollectionLoop(
 
 		if g.isCollection(srcVal) && g.isCollection(tgtVal) {
 			// For nested collections, we might need a block not just a string statement
-			body = g.generateCollectionLoop(valVar, tgtItem, srcVal, tgtVal, imports, depth+1)
+			body = g.generateCollectionLoop(valVar, tgtItem, srcVal, tgtVal, imports, depth+1, extraArgs)
 		} else {
 			tgtValStr := g.typeRefString(tgtVal, imports)
-			expr := g.buildValueConversion(valVar, srcVal, tgtVal, tgtValStr)
+			expr := g.buildValueConversionWithExtra(valVar, srcVal, tgtVal, tgtValStr, extraArgs)
 			body = fmt.Sprintf("%s = %s", tgtItem, expr)
 		}
 
@@ -1084,6 +1126,86 @@ func (g *Generator) getSliceElementType(t *analyze.TypeInfo) *analyze.TypeInfo {
 	}
 
 	return nil
+}
+
+// buildValueConversionWithExtra builds a value conversion expression, appending extra args for nested caster calls.
+func (g *Generator) buildValueConversionWithExtra(
+	srcExpr string,
+	srcType, tgtType *analyze.TypeInfo,
+	tgtTypeStr string,
+	extraArgs string,
+) string {
+	if g.typesIdentical(srcType, tgtType) {
+		return srcExpr
+	}
+
+	if g.typesConvertible(srcType, tgtType) {
+		return fmt.Sprintf("%s(%s)", tgtTypeStr, srcExpr)
+	}
+
+	if srcType.Kind == analyze.TypeKindStruct && tgtType.Kind == analyze.TypeKindStruct {
+		casterName := g.nestedFunctionName(srcType, tgtType)
+		if extraArgs != "" {
+			return fmt.Sprintf("%s(%s, %s)", casterName, srcExpr, extraArgs)
+		}
+
+		return fmt.Sprintf("%s(%s)", casterName, srcExpr)
+	}
+
+	// Handle pointer-to-struct element conversion (both pointers)
+	if srcType.Kind == analyze.TypeKindPointer && tgtType.Kind == analyze.TypeKindPointer {
+		srcInner := srcType.ElemType
+		tgtInner := tgtType.ElemType
+
+		if srcInner != nil && tgtInner != nil &&
+			srcInner.Kind == analyze.TypeKindStruct && tgtInner.Kind == analyze.TypeKindStruct {
+			casterName := g.nestedFunctionName(srcInner, tgtInner)
+
+			casterCall := casterName + "(*" + srcExpr + ")"
+			if extraArgs != "" {
+				casterCall = fmt.Sprintf("%s(*%s, %s)", casterName, srcExpr, extraArgs)
+			}
+
+			return fmt.Sprintf("func() %s { if %s == nil { return nil }; v := %s; return &v }()",
+				tgtTypeStr, srcExpr, casterCall)
+		}
+	}
+
+	// Handle pointer-to-struct -> struct element conversion (dereference + convert)
+	if srcType.Kind == analyze.TypeKindPointer && tgtType.Kind == analyze.TypeKindStruct {
+		srcInner := srcType.ElemType
+
+		if srcInner != nil && srcInner.Kind == analyze.TypeKindStruct {
+			casterName := g.nestedFunctionName(srcInner, tgtType)
+
+			casterCall := fmt.Sprintf("%s(*%s)", casterName, srcExpr)
+			if extraArgs != "" {
+				casterCall = fmt.Sprintf("%s(*%s, %s)", casterName, srcExpr, extraArgs)
+			}
+
+			return fmt.Sprintf("func() %s { if %s == nil { return %s{} /* FIXME: zero value used for nil pointer */ }; return %s }()",
+				tgtTypeStr, srcExpr, tgtTypeStr, casterCall)
+		}
+	}
+
+	// Handle struct -> pointer-to-struct element conversion (convert + reference)
+	if srcType.Kind == analyze.TypeKindStruct && tgtType.Kind == analyze.TypeKindPointer {
+		tgtInner := tgtType.ElemType
+
+		if tgtInner != nil && tgtInner.Kind == analyze.TypeKindStruct {
+			casterName := g.nestedFunctionName(srcType, tgtInner)
+
+			casterCall := fmt.Sprintf("%s(%s)", casterName, srcExpr)
+			if extraArgs != "" {
+				casterCall = fmt.Sprintf("%s(%s, %s)", casterName, srcExpr, extraArgs)
+			}
+
+			return fmt.Sprintf("func() %s { v := %s; return &v }()", tgtTypeStr, casterCall)
+		}
+	}
+
+	// Fallback - hope for the best
+	return srcExpr
 }
 
 func (g *Generator) buildValueConversion(
@@ -1152,22 +1274,7 @@ func (g *Generator) buildMapMapping(
 	pair *plan.ResolvedTypePair,
 	imports map[string]importSpec,
 ) string {
-	if len(m.SourcePaths) == 0 || len(m.TargetPaths) == 0 {
-		return ""
-	}
-
-	srcField := "in." + m.SourcePaths[0].String()
-	tgtField := "out." + m.TargetPaths[0].String()
-
-	srcType := g.getFieldTypeInfo(pair.SourceType, m.SourcePaths[0].String())
-	tgtType := g.getFieldTypeInfo(pair.TargetType, m.TargetPaths[0].String())
-
-	if srcType == nil || tgtType == nil {
-		return fmt.Sprintf("// TODO: could not determine types for map mapping %s -> %s",
-			m.SourcePaths[0], m.TargetPaths[0])
-	}
-
-	return g.generateCollectionLoop(srcField, tgtField, srcType, tgtType, imports, 0)
+	return g.buildCollectionMapping(m, pair, imports, "map")
 }
 
 func (g *Generator) getMapKeyType(t *analyze.TypeInfo) *analyze.TypeInfo {
@@ -1214,6 +1321,72 @@ func (g *Generator) buildTransformArgs(paths []mapping.FieldPath, pair *plan.Res
 	return strings.Join(args, ", ")
 }
 
+// getRequiredArgType returns the TypeInfo for a required argument by name, or nil if not found.
+func (g *Generator) getRequiredArgType(pair *plan.ResolvedTypePair, name string) *analyze.TypeInfo {
+	for _, req := range pair.Requires {
+		if req.Name == name {
+			return g.typeInfoFromString(req.Type)
+		}
+	}
+
+	return nil
+}
+
+// typeInfoFromString creates a TypeInfo from a type string (e.g., "uint", "string", "*int").
+func (g *Generator) typeInfoFromString(typeStr string) *analyze.TypeInfo {
+	if typeStr == "" || typeStr == common.InterfaceTypeStr {
+		return nil
+	}
+
+	// Handle pointer types
+	if strings.HasPrefix(typeStr, "*") {
+		elemType := g.typeInfoFromString(typeStr[1:])
+
+		return &analyze.TypeInfo{
+			ID:       analyze.TypeID{Name: typeStr},
+			Kind:     analyze.TypeKindPointer,
+			ElemType: elemType,
+		}
+	}
+
+	// Handle slice types
+	if strings.HasPrefix(typeStr, "[]") {
+		elemType := g.typeInfoFromString(typeStr[2:])
+
+		return &analyze.TypeInfo{
+			ID:       analyze.TypeID{Name: typeStr},
+			Kind:     analyze.TypeKindSlice,
+			ElemType: elemType,
+		}
+	}
+
+	// Handle map types (basic parsing)
+	if strings.HasPrefix(typeStr, "map[") {
+		// For simplicity, return as basic type - the string will be preserved
+		return &analyze.TypeInfo{
+			ID:   analyze.TypeID{Name: typeStr},
+			Kind: analyze.TypeKindBasic,
+		}
+	}
+
+	// Check if it's a qualified type (has a dot for package)
+	if dotIdx := strings.LastIndex(typeStr, "."); dotIdx > 0 {
+		pkgPath := typeStr[:dotIdx]
+		name := typeStr[dotIdx+1:]
+
+		return &analyze.TypeInfo{
+			ID:   analyze.TypeID{PkgPath: pkgPath, Name: name},
+			Kind: analyze.TypeKindExternal,
+		}
+	}
+
+	// Basic type
+	return &analyze.TypeInfo{
+		ID:   analyze.TypeID{Name: typeStr},
+		Kind: analyze.TypeKindBasic,
+	}
+}
+
 // identifyMissingTransforms finds referenced transforms that are not imported or defined.
 func (g *Generator) identifyMissingTransforms(
 	pair *plan.ResolvedTypePair,
@@ -1234,6 +1407,11 @@ func (g *Generator) identifyMissingTransforms(
 			continue
 		}
 
+		// If transform is declared in the mapping file, skip it
+		if g.config.DeclaredTransforms != nil && g.config.DeclaredTransforms[m.Transform] {
+			continue
+		}
+
 		if !seen[m.Transform] {
 			// Check if we already have this transform in the global map
 			if _, exists := g.missingTransforms[m.Transform]; exists {
@@ -1245,7 +1423,17 @@ func (g *Generator) identifyMissingTransforms(
 			var argInfos []*analyze.TypeInfo
 
 			for _, sp := range m.SourcePaths {
-				info := g.getFieldTypeInfo(pair.SourceType, sp.String())
+				// First check if this source path refers to a required argument
+				var info *analyze.TypeInfo
+				if len(sp.Segments) > 0 {
+					info = g.getRequiredArgType(pair, sp.Segments[0].Name)
+				}
+
+				// If not a required arg, look up from source type
+				if info == nil {
+					info = g.getFieldTypeInfo(pair.SourceType, sp.String())
+				}
+
 				argInfos = append(argInfos, info)
 			}
 
@@ -1253,15 +1441,26 @@ func (g *Generator) identifyMissingTransforms(
 			for _, exp := range m.Extra {
 				var info *analyze.TypeInfo
 
+				// First check if the extra matches a required argument
+				info = g.getRequiredArgType(pair, exp.Name)
+				if info != nil {
+					argInfos = append(argInfos, info)
+					continue
+				}
+
 				switch {
 				case exp.Def.Source != "":
-					info = g.getFieldTypeInfo(pair.SourceType, exp.Def.Source)
+					// Check if source refers to a required arg
+					info = g.getRequiredArgType(pair, exp.Def.Source)
+					if info == nil {
+						info = g.getFieldTypeInfo(pair.SourceType, exp.Def.Source)
+					}
 				case exp.Def.Target != "":
-					// Reference to target type field?
+					// Reference to target type field
 					info = g.getFieldTypeInfo(pair.TargetType, exp.Def.Target)
 				default:
-					// Fallback
-					info = nil
+					// Fallback - check if name matches a required arg
+					info = g.getRequiredArgType(pair, exp.Name)
 				}
 
 				argInfos = append(argInfos, info)

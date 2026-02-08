@@ -119,7 +119,7 @@ test_compile ./examples/pointers/generated || {
   test_compile ./examples/pointers || {
     warn "Compile check failed"
     scenario_partial "Review errors and fix transforms"
-    exit 0
+    exit 1
   }
 }
 

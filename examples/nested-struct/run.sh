@@ -235,7 +235,7 @@ stage_start "Compile Check" "Verify generated code compiles"
 test_compile ./examples/nested-struct || {
   warn "Compile check failed - may need additional transforms or fixes"
   scenario_partial "Review the errors above and implement missing transforms"
-  exit 0
+  exit 1
 }
 
 # ============================================================================

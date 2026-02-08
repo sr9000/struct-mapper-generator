@@ -331,7 +331,7 @@ if [[ "$file_count" -eq 0 ]]; then
   warn "No casters generated - this example requires dive hint support for nested structs"
   warn "The mapping file demonstrates the structure for chained mappings"
   scenario_partial "Generation requires improved dive hint handling for nested struct mapping"
-  exit 0
+  exit 1
 fi
 
 prompt_continue
@@ -344,7 +344,7 @@ stage_start "Compile Check" "Verify everything compiles"
 test_compile ./examples/multi-mapping || {
   warn "Compile check failed"
   scenario_partial "Review errors and adjust transforms"
-  exit 0
+  exit 1
 }
 
 # ============================================================================

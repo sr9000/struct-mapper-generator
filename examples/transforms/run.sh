@@ -383,7 +383,7 @@ stage_start "Compile Check" "Verify everything compiles together"
 test_compile ./examples/transforms || {
   warn "Compile check failed - reviewing errors..."
   scenario_partial "Check transform function signatures match generated code"
-  exit 0
+  exit 1
 }
 
 # ============================================================================

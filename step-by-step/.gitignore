@@ -1,0 +1,2 @@
+# Ignore generated stage files (they're created when running the tutorial)
+stages/

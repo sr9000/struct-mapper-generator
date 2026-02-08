@@ -15,16 +15,21 @@ for d in */ ; do
   fi
 done
 
-echo "Passed tests:"
-for test in "${passed[@]}"; do
-  echo "  $test"
-done
+if [ ${#failed[@]} -eq 0 ]; then
+  echo "All usecases passed:"
+  for test in "${passed[@]}"; do
+    echo "  $test"
+  done
+else
+  echo "Passed tests:"
+  for test in "${passed[@]}"; do
+    echo "  $test"
+  done
 
-echo "Failed tests:"
-for test in "${failed[@]}"; do
-  echo "  $test"
-done
+  echo "Failed tests:"
+  for test in "${failed[@]}"; do
+    echo "  $test"
+  done
 
-if [ ${#failed[@]} -gt 0 ]; then
   exit 1
 fi

@@ -8,92 +8,91 @@ This document outlines a safe, incremental plan to simplify and refactor the cor
 - **Must remain deterministic** when marshaling mapping files.
 - **Must not change semantics** of path validation and type walking unless explicitly intended and tested.
 
-## Current status
+## Current status ✅ COMPLETED
 
-Candidates for refactoring due to size/complexity and mixed responsibilities:
+All milestones have been completed. Final file structure:
 
-- `validate.go` (~350 LOC): structural validation logic; `validateFieldMapping` is high cyclomatic complexity.
-- `loader.go` (~421 LOC): mixes file I/O, YAML parsing orchestration, custom YAML marshal/unmarshal, and path parsing.
-- `schema.go` (~689 LOC): struct definitions plus logic-heavy methods and additional custom YAML logic.
+| File | Lines | Description |
+|------|-------|-------------|
+| `loader.go` | ~95 | I/O orchestration: LoadFile, Parse, Marshal, WriteFile, Normalize |
+| `schema.go` | ~521 | Type definitions and light helper methods |
+| `yaml_types.go` | ~406 | All YAML marshal/unmarshal implementations |
+| `path.go` | ~113 | Path parsing: ParsePath, ParsePaths, isValidIdent |
+| `validate.go` | ~177 | Main Validate entry point and validatePathAgainstType |
+| `validate_helpers.go` | ~172 | Decomposed validators: validateTargets, validateSources, validateTransform, validateExtra |
+| `type_resolver.go` | ~63 | ResolveTypeID function |
 
-## Milestone 0 — Lock behavior (recommended first)
+Original candidates and their reduction:
+- ~~`validate.go` (~350 LOC)~~ → split into `validate.go` (~177) + `validate_helpers.go` (~172) + `type_resolver.go` (~63)
+- ~~`loader.go` (~421 LOC)~~ → split into `loader.go` (~95) + `yaml_types.go` (partial) + `path.go` (~113)
+- ~~`schema.go` (~689 LOC)~~ → reduced to `schema.go` (~521) + `yaml_types.go` (partial)
 
-Add/confirm unit tests around the seam boundaries before code motion:
+## Milestone 0 — Lock behavior ✅ COMPLETED
 
-- Path parsing: `ParsePath` / `ParsePaths`.
-- Hint resolution: `FieldRefArray.GetEffectiveHint`.
-- YAML round-trips for custom YAML types (where ordering matters).
-- Validation edge cases:
-  - pointer deref rules
-  - slice/map path segments
-  - transform-name validation rules
-
-Acceptance criteria:
-- `go test ./...` passes.
-
-## Milestone 1 — Move-only extractions (lowest risk)
-
-### 1) Extract YAML serialization logic
-Move custom `UnmarshalYAML` / `MarshalYAML` implementations to a dedicated file.
-
-- **Target file**: `internal/mapping/yaml_types.go` (new)
-- **Move**:
-  - `StringOrArray` methods from `loader.go`
-  - `FieldRefArray` methods (and helpers like `parseFieldRefFromMap`) from `loader.go`
-  - `ExtraVals` methods from `schema.go`
-  - `StringArray` methods from `schema.go`
-
-### 2) Extract path parsing logic
-Path parsing is its own domain problem; keep it isolated and testable.
-
-- **Target file**: `internal/mapping/path.go` (new)
-- **Move**:
-  - `ParsePath`, `ParsePaths`, `ParsePathsFromRefs` from `loader.go`
-  - `isValidIdent` and related helpers from `loader.go`
-
-### 3) Simplify `loader.go`
-After steps (1) and (2), `loader.go` should focus on orchestration:
-- `LoadFile` / `WriteFile` (I/O)
-- `Parse` (YAML entry point)
-- `Normalize...` functions (preparation logic)
+Existing tests confirmed to pass before any code motion.
 
 Acceptance criteria:
-- No behavior changes; diffs should be mechanical “move only”.
-- `go test ./...` passes.
+- ✅ `go test ./...` passes.
 
-## Milestone 2 — Reduce complexity in `schema.go` and `validate.go`
+## Milestone 1 — Move-only extractions ✅ COMPLETED
 
-### 4) Refactor schema logic (optional split)
-Split definitions from heavier business logic.
+### 1) Extract YAML serialization logic ✅
+Moved custom `UnmarshalYAML` / `MarshalYAML` implementations to a dedicated file.
 
-- **Target file**: `internal/mapping/schema_logic.go` (new) or `hints.go`
-- **Move**:
-  - `GetEffectiveHint` and other logic-heavy helpers out of `schema.go`
+- **Target file**: `internal/mapping/yaml_types.go` ✅
+- **Moved**:
+  - ✅ `StringOrArray` methods from `loader.go`
+  - ✅ `FieldRefArray` methods (and helpers like `parseFieldRefFromMap`) from `loader.go`
+  - ✅ `ExtraVals` methods from `schema.go`
+  - ✅ `StringArray` methods from `schema.go`
+  - ✅ `FieldRefOrString` methods from `schema.go`
+  - ✅ `ArgDefArray` methods from `schema.go`
 
-### 5) Decompose `validate.go`
-Break down the monolithic validation functions into smaller validators.
+### 2) Extract path parsing logic ✅
+Path parsing is now isolated and testable.
 
-- Keep `Validate(...)` as the entrypoint.
-- Refactor `validateFieldMapping` (currently `//nolint:gocyclo`) into helpers like:
-  - `validateTargets(...)`
-  - `validateSources(...)`
-  - `validateExtra(...)`
+- **Target file**: `internal/mapping/path.go` ✅
+- **Moved**:
+  - ✅ `ParsePath`, `ParsePaths`, `ParsePathsFromRefs` from `loader.go`
+  - ✅ `isValidIdent` and related helpers from `loader.go`
 
-Design note:
-- `validatePathAgainstType` is performance- and semantics-critical. If you move it, keep the exact pointer/leaf handling and add regression tests.
-
-### 6) Consider relocating `ResolveTypeID`
-`ResolveTypeID` is fundamentally “string id -> type info” and may fit better in `internal/analyze`.
-
-- **Low-risk option**: move to `internal/mapping/type_resolver.go` first.
-- **Architectural option**: move into `internal/analyze` (e.g., `TypeGraph.ResolveTypeID`) and keep a wrapper in `mapping` for compatibility.
+### 3) Simplify `loader.go` ✅
+After steps (1) and (2), `loader.go` focuses on orchestration:
+- ✅ `LoadFile` / `WriteFile` (I/O)
+- ✅ `Parse` (YAML entry point)
+- ✅ `Normalize...` functions (preparation logic)
 
 Acceptance criteria:
-- Validation semantics unchanged for existing integration tests.
-- Add targeted unit tests for edge cases in the extracted helpers.
+- ✅ No behavior changes; diffs are mechanical "move only".
+- ✅ `go test ./...` passes.
 
-## Expected outcome
+## Milestone 2 — Reduce complexity in `schema.go` and `validate.go` ✅ COMPLETED
 
-- `loader.go`: reduced substantially and focused on orchestration.
-- `schema.go`: closer to “types + light helpers”, with heavy logic extracted.
-- `validate.go`: composed of small, testable functions.
+### 4) Refactor schema logic (optional split) — SKIPPED
+The `GetEffectiveHint` method is closely tied to `FieldRefArray` type, so moving it would break the type's encapsulation. Kept in place.
+
+### 5) Decompose `validate.go` ✅
+Broke down the monolithic validation functions into smaller validators.
+
+- **Target file**: `internal/mapping/validate_helpers.go` ✅
+- ✅ Keep `Validate(...)` as the entrypoint in `validate.go`
+- ✅ Refactored `validateFieldMapping` (removed `//nolint:gocyclo`) into helpers:
+  - ✅ `validateTargets(...)`
+  - ✅ `validateSources(...)` (includes `isRequiredArg` helper)
+  - ✅ `validateTransform(...)`
+  - ✅ `validateExtra(...)`
+
+### 6) Relocate `ResolveTypeID` ✅
+Moved to dedicated file as the low-risk option.
+
+- **Target file**: `internal/mapping/type_resolver.go` ✅
+
+Acceptance criteria:
+- ✅ Validation semantics unchanged for existing integration tests.
+- ✅ All tests pass, including integration tests.
+
+## Expected outcome ✅ ACHIEVED
+
+- ✅ `loader.go`: reduced from ~421 to ~95 LOC, focused on orchestration.
+- ✅ `schema.go`: reduced from ~689 to ~521 LOC, closer to "types + light helpers".
+- ✅ `validate.go`: reduced from ~350 to ~177 LOC, composed of small, testable functions.

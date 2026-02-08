@@ -2,7 +2,6 @@ package mapping
 
 import (
 	"fmt"
-	"strings"
 
 	"caster-generator/internal/analyze"
 	"caster-generator/internal/diagnostic"
@@ -91,7 +90,7 @@ func Validate(mf *MappingFile, graph *analyze.TypeGraph) *diagnostic.Diagnostics
 	return res
 }
 
-//nolint:gocyclo
+// validateFieldMapping validates a single field mapping within a type mapping.
 func validateFieldMapping(
 	res *diagnostic.Diagnostics,
 	typePairStr string,
@@ -104,125 +103,10 @@ func validateFieldMapping(
 		return
 	}
 
-	card := fm.GetCardinality()
-
-	// validate target
-	for _, t := range fm.Target {
-		if t.Path == "" {
-			res.AddError("missing_target_path", "field mapping must specify target", typePairStr, "")
-			continue
-		}
-
-		if err := validatePathAgainstType(t.Path, dstT); err != nil {
-			res.AddError("invalid_target_path", fmt.Sprintf("invalid target path: %v", err), typePairStr, t.Path)
-		}
-
-		if !t.Hint.IsValid() {
-			res.AddError("invalid_hint", fmt.Sprintf("invalid hint %q", t.Hint), typePairStr, t.Path)
-		}
-	}
-
-	// validate sources (unless default)
-	if fm.Default == nil {
-		if len(fm.Source) == 0 {
-			res.AddError("missing_source", "field mapping must specify source (or default)", typePairStr, "")
-		} else {
-			for _, s := range fm.Source {
-				if s.Path == "" {
-					res.AddError("empty_source_path", "field mapping must specify source", typePairStr, "")
-					continue
-				}
-
-				// Check if this source path starts with a required argument
-				isReq := false
-
-				if parent != nil {
-					// extract first segment of path (simple split, as path parsing is done later)
-					parts := strings.Split(s.Path, ".")
-					if len(parts) > 0 {
-						for _, req := range parent.Requires {
-							if req.Name == parts[0] {
-								isReq = true
-								break
-							}
-						}
-					}
-				}
-
-				if !isReq {
-					if err := validatePathAgainstType(s.Path, srcT); err != nil {
-						res.AddError("invalid_source_path", fmt.Sprintf("invalid source path: %v", err), typePairStr, s.Path)
-					}
-				}
-
-				if !s.Hint.IsValid() {
-					res.AddError("invalid_hint", fmt.Sprintf("invalid hint %q", s.Hint), typePairStr, s.Path)
-				}
-			}
-		}
-	}
-
-	// many:1 and many:many require a transform
-	if fm.NeedsTransform() && fm.Transform == "" {
-		res.AddError("missing_transform", card.String()+" mapping requires transform", typePairStr, "")
-	}
-
-	// A referenced transform must exist in the registry, unless it's a simple name
-	// (without package prefix) which will have a stub generated.
-	if fm.Transform != "" {
-		if _, ok := knownTransforms[fm.Transform]; !ok {
-			// Allow simple transform names without package prefix - stubs will be generated
-			if strings.Contains(fm.Transform, ".") {
-				res.AddError("unknown_transform",
-					fmt.Sprintf("referenced transform %q is not declared in transforms", fm.Transform),
-					typePairStr, "")
-			}
-		}
-	}
-
-	// validate extra definitions
-	for _, ev := range fm.Extra {
-		if ev.Name == "" {
-			res.AddError("empty_extra_name", "extra entry has empty name", typePairStr, "")
-			continue
-		}
-
-		// If this extra is intended to satisfy a required argument, ensure it's declared.
-		if parent != nil {
-			declared := false
-
-			for i := range parent.Requires {
-				if parent.Requires[i].Name == ev.Name {
-					declared = true
-					break
-				}
-			}
-
-			if !declared {
-				// Relax validation: if the extra arg has a definition (source or target),
-				// it's creating a new value, not just forwarding a required arg.
-				isDefinition := ev.Def.Source != "" || ev.Def.Target != ""
-
-				if !isDefinition {
-					res.AddError("undeclared_extra_arg",
-						fmt.Sprintf("extra %q references an undeclared requires arg; add it under requires: or rename", ev.Name),
-						typePairStr, "")
-				}
-			}
-		}
-
-		if ev.Def.Source != "" {
-			if err := validatePathAgainstType(ev.Def.Source, srcT); err != nil {
-				res.AddError("invalid_extra_source", fmt.Sprintf("invalid extra.def.source: %v", err), typePairStr, ev.Def.Source)
-			}
-		}
-
-		if ev.Def.Target != "" {
-			if err := validatePathAgainstType(ev.Def.Target, dstT); err != nil {
-				res.AddError("invalid_extra_target", fmt.Sprintf("invalid extra.def.target: %v", err), typePairStr, ev.Def.Target)
-			}
-		}
-	}
+	validateTargets(res, typePairStr, dstT, fm)
+	validateSources(res, typePairStr, srcT, parent, fm)
+	validateTransform(res, typePairStr, fm, knownTransforms)
+	validateExtra(res, typePairStr, srcT, dstT, parent, fm)
 }
 
 func validatePathAgainstType(pathStr string, typeInfo *analyze.TypeInfo) error {
@@ -286,62 +170,6 @@ func validatePathAgainstType(pathStr string, typeInfo *analyze.TypeInfo) error {
 			if current == nil {
 				return fmt.Errorf("nil slice element while resolving %q", seg.Name)
 			}
-		}
-	}
-
-	return nil
-}
-
-// ResolveTypeID resolves a type ID string like:
-// - "store.Order" (short)
-// - "caster-generator/store.Order" (full)
-// - "Order" (name only).
-func ResolveTypeID(typeIDStr string, graph *analyze.TypeGraph) *analyze.TypeInfo {
-	if graph == nil {
-		return nil
-	}
-
-	// Name-only: best-effort match by type name.
-	if !strings.Contains(typeIDStr, ".") {
-		name := typeIDStr
-		if name == "" {
-			return nil
-		}
-
-		for id, t := range graph.Types {
-			if id.Name == name {
-				return t
-			}
-		}
-
-		return nil
-	}
-
-	lastDot := strings.LastIndex(typeIDStr, ".")
-	if lastDot < 0 {
-		return nil
-	}
-
-	pkgStr := typeIDStr[:lastDot]
-
-	name := typeIDStr[lastDot+1:]
-	if pkgStr == "" || name == "" {
-		return nil
-	}
-
-	// 1) exact match (for fully qualified import path)
-	if t := graph.GetType(analyze.TypeID{PkgPath: pkgStr, Name: name}); t != nil {
-		return t
-	}
-
-	// 2) suffix match (for short forms like "store.Order" vs "caster-generator/store.Order")
-	for id, t := range graph.Types {
-		if id.Name != name {
-			continue
-		}
-
-		if id.PkgPath == pkgStr || strings.HasSuffix(id.PkgPath, "/"+pkgStr) {
-			return t
 		}
 	}
 

@@ -437,11 +437,19 @@ Example generated stub (placed in the generated package):
 
 package casters
 
-// Missing transforms. Implement these in your project or declare them in the mapping file.
-func OrderID2OrderID(v0 interface{}) uint {
+// Missing transforms. Ideally, these should be implemented in your project or defined as transforms in map.yaml
+
+func OrderID2OrderID(v0 uint) uint {
     panic("transform OrderID2OrderID not implemented")
 }
 ```
+
+**Inheriting Types from Context**
+
+The generator is smart enough to infer argument types for transform stubs from the context:
+- If an argument comes from a `requires` section, its specific type is used in the signature.
+- If `extra` values are used to pass additional data (like IDs or configuration) to a transform, those types are inherited from the source/target fields or `requires` context.
+- This eliminates the need for `interface{}` and manual casting in your implementations.
 
 **Recommendations**
 

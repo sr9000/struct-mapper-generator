@@ -1324,6 +1324,72 @@ func (g *Generator) buildTransformArgs(paths []mapping.FieldPath, pair *plan.Res
 	return strings.Join(args, ", ")
 }
 
+// getRequiredArgType returns the TypeInfo for a required argument by name, or nil if not found.
+func (g *Generator) getRequiredArgType(pair *plan.ResolvedTypePair, name string) *analyze.TypeInfo {
+	for _, req := range pair.Requires {
+		if req.Name == name {
+			return g.typeInfoFromString(req.Type)
+		}
+	}
+
+	return nil
+}
+
+// typeInfoFromString creates a TypeInfo from a type string (e.g., "uint", "string", "*int").
+func (g *Generator) typeInfoFromString(typeStr string) *analyze.TypeInfo {
+	if typeStr == "" || typeStr == common.InterfaceTypeStr {
+		return nil
+	}
+
+	// Handle pointer types
+	if strings.HasPrefix(typeStr, "*") {
+		elemType := g.typeInfoFromString(typeStr[1:])
+
+		return &analyze.TypeInfo{
+			ID:       analyze.TypeID{Name: typeStr},
+			Kind:     analyze.TypeKindPointer,
+			ElemType: elemType,
+		}
+	}
+
+	// Handle slice types
+	if strings.HasPrefix(typeStr, "[]") {
+		elemType := g.typeInfoFromString(typeStr[2:])
+
+		return &analyze.TypeInfo{
+			ID:       analyze.TypeID{Name: typeStr},
+			Kind:     analyze.TypeKindSlice,
+			ElemType: elemType,
+		}
+	}
+
+	// Handle map types (basic parsing)
+	if strings.HasPrefix(typeStr, "map[") {
+		// For simplicity, return as basic type - the string will be preserved
+		return &analyze.TypeInfo{
+			ID:   analyze.TypeID{Name: typeStr},
+			Kind: analyze.TypeKindBasic,
+		}
+	}
+
+	// Check if it's a qualified type (has a dot for package)
+	if dotIdx := strings.LastIndex(typeStr, "."); dotIdx > 0 {
+		pkgPath := typeStr[:dotIdx]
+		name := typeStr[dotIdx+1:]
+
+		return &analyze.TypeInfo{
+			ID:   analyze.TypeID{PkgPath: pkgPath, Name: name},
+			Kind: analyze.TypeKindExternal,
+		}
+	}
+
+	// Basic type
+	return &analyze.TypeInfo{
+		ID:   analyze.TypeID{Name: typeStr},
+		Kind: analyze.TypeKindBasic,
+	}
+}
+
 // identifyMissingTransforms finds referenced transforms that are not imported or defined.
 func (g *Generator) identifyMissingTransforms(
 	pair *plan.ResolvedTypePair,
@@ -1360,7 +1426,17 @@ func (g *Generator) identifyMissingTransforms(
 			var argInfos []*analyze.TypeInfo
 
 			for _, sp := range m.SourcePaths {
-				info := g.getFieldTypeInfo(pair.SourceType, sp.String())
+				// First check if this source path refers to a required argument
+				var info *analyze.TypeInfo
+				if len(sp.Segments) > 0 {
+					info = g.getRequiredArgType(pair, sp.Segments[0].Name)
+				}
+
+				// If not a required arg, look up from source type
+				if info == nil {
+					info = g.getFieldTypeInfo(pair.SourceType, sp.String())
+				}
+
 				argInfos = append(argInfos, info)
 			}
 
@@ -1368,15 +1444,26 @@ func (g *Generator) identifyMissingTransforms(
 			for _, exp := range m.Extra {
 				var info *analyze.TypeInfo
 
+				// First check if the extra matches a required argument
+				info = g.getRequiredArgType(pair, exp.Name)
+				if info != nil {
+					argInfos = append(argInfos, info)
+					continue
+				}
+
 				switch {
 				case exp.Def.Source != "":
-					info = g.getFieldTypeInfo(pair.SourceType, exp.Def.Source)
+					// Check if source refers to a required arg
+					info = g.getRequiredArgType(pair, exp.Def.Source)
+					if info == nil {
+						info = g.getFieldTypeInfo(pair.SourceType, exp.Def.Source)
+					}
 				case exp.Def.Target != "":
-					// Reference to target type field?
+					// Reference to target type field
 					info = g.getFieldTypeInfo(pair.TargetType, exp.Def.Target)
 				default:
-					// Fallback
-					info = nil
+					// Fallback - check if name matches a required arg
+					info = g.getRequiredArgType(pair, exp.Name)
 				}
 
 				argInfos = append(argInfos, info)

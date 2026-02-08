@@ -1,4 +1,4 @@
-package nested
+package nested_struct
 
 import "time"
 

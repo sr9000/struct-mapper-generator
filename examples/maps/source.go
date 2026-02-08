@@ -1,5 +1,12 @@
 package maps
 
+type Name string
+
+type Params struct {
+	Age  int
+	City string
+}
+
 type Source struct {
-	Tags map[string]string
+	Tags map[Name]Params
 }

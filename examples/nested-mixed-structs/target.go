@@ -2,7 +2,7 @@ package nestedmixed
 
 type DomainOrder struct {
 	ID    string
-	Lines []*DomainLine
+	Lines []DomainLine
 }
 
 type DomainLine struct {
